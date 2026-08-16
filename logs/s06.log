@@ -1,0 +1,83 @@
+==============================================================================
+s06  Attention
+      stop discarding what the encoder already computed
+==============================================================================
+
+6.1  One context per output step, not one per sentence
+------------------------------------------------------------------------------
+  eq:  e_ij = score(d_i, s_j)
+       how relevant source position j is to output i
+  eq:  a_ij = softmax_j(e_ij)
+       a probability distribution over source positions: non-negative, summing to one
+  eq:  c_i = sum_j a_ij s_j
+       this step's context: a weighted average of every encoder state
+
+  S5's decoder read one vector, computed once. This decoder builds a
+  new one at every output step, and can weight the source differently
+  each time. Nothing new is computed on the encoder side -- s_1 to s_L
+  already existed and were being discarded.
+
+6.2  What that does to S5's measurement
+------------------------------------------------------------------------------
+  source length L  single context (S5)  with attention  improvement
+  ---------------  -------------------  --------------  -----------
+                4               0.7958               1         1.3x
+                8                 0.55               1         1.8x
+               16               0.3906               1         2.6x
+               32               0.2573          0.9961         3.9x
+               64               0.1799          0.9859         5.5x
+  [PASS] attention removes the length dependence that the bottleneck created
+         at L=64 recall goes from 0.180 to 0.986, at the same state width
+  [PASS] the advantage grows with source length
+         1.3x at L=4 against 5.5x at L=64 -- short sentences never needed it
+  # this is the shape reported at the time: attention barely helped on short sentences and transformed long ones. A fix whose benefit tracks the severity of the problem it targets is good evidence the diagnosis was right
+
+6.3  Why the counting bound no longer applies
+------------------------------------------------------------------------------
+  eq:  single context:  d * 32 bits  must hold  L * log2(V) bits
+       one vector, so the bound of S5.2 binds
+  eq:  attention:       L states x d, read selectively per step
+       the channel is no longer fixed-width; it grows with the source
+  source length L  single-context ceiling (symbols)  numbers available with attention  contexts built
+  ---------------  --------------------------------  --------------------------------  --------------
+                8                               286                               256               8
+               32                               286                             1,024              32
+              128                               286                             4,096             128
+  [PASS] attention converts a fixed channel into one that scales with the input
+         S5's bound was d*32 >= L*log2(V) and constrained L; with L states kept, the storage grows with L and the constraint disappears
+  # and the cost arrives in the same breath. Keeping L states and scoring each of them at each of M output steps is L*M scores per sentence, where the single context needed one vector and none. That quadratic term never goes away -- S7 inherits it, and S11 is about paying for it
+
+6.4  The weights are a distribution over inputs -- but are they honest?
+------------------------------------------------------------------------------
+  Because a_ij is a probability distribution over source positions, it can
+  be read after the fact: which parts of the input did this output use?
+  That claim is made constantly. It is checkable.
+  source length L  peak weight on the right position  weight entropy (bits)  uniform would be
+  ---------------  ---------------------------------  ---------------------  ----------------
+                8                                  1                  0.563                 3
+               16                                  1                  0.032                 4
+               32                                  1                  0.227                 5
+               64                                  1                  0.282                 6
+  [PASS] the attention weights concentrate on the source position actually being used
+         the peak weight lands on the queried position 100.0% of the time at L=8
+  [PASS] the weights carry real information, sitting well below uniform entropy
+         L=8: 0.56 bits against 3.00 uniform; L=16: 0.03 bits against 4.00 uniform; L=32: 0.23 bits against 5.00 uniform; L=64: 0.28 bits against 6.00 uniform
+  # this is the strongest practical argument for attention outside of accuracy, and it is worth stating carefully because it is easy to overclaim. What the weights give you is a record of which inputs the model *read* -- an attribution over the source, per output, available at no extra cost and without a separate explainability method. What they do not give you is a causal account of the model's reasoning: high weight means the value was mixed into the context, not that it determined the answer. For a regulated setting that distinction is the difference between a defensible artifact and an indefensible one, and it is measurable -- which is what the alignment column above is
+
+6.5  What attention did not fix
+------------------------------------------------------------------------------
+  The encoder is still recurrent. s_j cannot be computed before
+  s_{j-1}, so reading a source sentence of length L still takes L
+  dependent steps, exactly as in S2.5 and S4.6.
+  source length L  sequential steps to encode  attention scores per sentence
+  ---------------  --------------------------  -----------------------------
+               32                          32                          1,024
+              256                         256                         65,536
+             2048                        2048                      4,194,304
+  [PASS] attention left the sequential cost of the encoder untouched
+         attention changed what the decoder may read; it did not change how the encoder states are produced, and they are still produced one after another
+  # so by 2017 the position was: gradients travel (S4), information reaches the decoder (here), and the thing still runs one step at a time. On the hardware that was arriving, that last constraint had become the expensive one -- and the observation that resolved it is almost embarrassing in hindsight. If attention already lets any position read any other directly, what is the recurrence still for?
+
+s06 claims 6/6 passed in 5.24s
+==============================================================================
+

@@ -1,0 +1,192 @@
+==============================================================================
+s12  Latency, caching and cost
+      prefill is compute-bound, decode is not, and the rest follows
+==============================================================================
+
+11.1  Every device has a ridge point, and nobody quotes it
+------------------------------------------------------------------------------
+  eq:  balance = peak_FLOP/s / bandwidth_bytes/s
+       the arithmetic intensity below which a kernel is memory-bound no matter how it is written
+  device                  peak TFLOP/s  bandwidth GB/s  balance FLOP/byte
+  ----------------------  ------------  --------------  -----------------
+  datacentre, 80GB HBM2e           312            2039                153
+  datacentre, 80GB HBM3            989            3350              295.2
+  laptop GPU, 4GB GDDR6            2.9             128               22.7
+  [PASS] datacentre accelerators demand over a hundred operations per byte to reach peak
+         153 and 295 FLOP/byte against 23 for the laptop part
+  # the gap between the first two rows and the third is the real story of the last decade of accelerators: arithmetic got very much cheaper than memory traffic. A kernel written when balance was 20 is memory-starved on a machine where it is 153
+
+11.2  Prefill intensity grows with length; decode intensity is the batch
+------------------------------------------------------------------------------
+  eq:  prefill:  FLOPs ~ 2 * macs(T),  bytes ~ P * b_w   =>   I grows with T
+       the prompt amortises one weight read over T tokens of work
+  eq:  decode:   FLOPs = 2 * P * B,    bytes = P * b_w + B*T*kv   =>   I ~ B
+       one weight read produces exactly one token per sequence in the batch
+  phase    condition  intensity FLOP/byte  attainable TFLOP/s  % of peak
+  -------  ---------  -------------------  ------------------  ---------
+  prefill  T=128                    140.1               285.6        92%
+  prefill  T=1,024                 1161.5                 312       100%
+  prefill  T=8,192                11898.2                 312       100%
+  decode   B=1                       0.98                2.01       0.6%
+  decode   B=8                       7.06               14.39       4.6%
+  decode   B=32                     20.85               42.51      13.6%
+  decode   B=128                    40.77               83.13      26.6%
+  decode   B=256                    48.49               98.88      31.7%
+  [PASS] single-stream decode reaches under one percent of a device's arithmetic peak
+         intensity 0.98 FLOP/byte against a balance of 153, giving 0.64% of peak
+  [PASS] prefill is compute-bound at any realistic prompt length
+         intensity 1161 FLOP/byte at T=1,024, above the 153 ridge point
+  # this is why a faster GPU does not speed up a single conversation. At batch one the machine waits on memory for the whole step, so adding arithmetic capacity changes nothing; the only fixes are moving fewer bytes or amortising the read over more sequences. It is also why throughput and latency benchmarks disagree so violently -- they sit on opposite sides of the ridge.
+
+  eq:  I(B) = 2PB / (P b_w + B T kv)  ->  2 T* / (b_w T)  as B -> inf
+       the KV term scales with batch exactly as the numerator does, so it never amortises; at fp16 the ceiling is simply T* / T
+  context T  intensity ceiling   T*/T  batch to reach ridge  best % of peak
+  ---------  -----------------  -----  --------------------  --------------
+        128              957.3  957.3                   183            100%
+        512              239.3  239.3                   425            100%
+      2,048               59.8   59.8           unreachable             39%
+      8,192                 15     15           unreachable             10%
+     32,768                3.7    3.7           unreachable              2%
+  [PASS] the decode intensity ceiling equals T*/T at fp16
+         ceiling matches the crossover ratio at every context length tested
+  [PASS] beyond a context of a few thousand tokens, no batch size makes decode compute-bound
+         at T=128 the ridge needs a batch of 183; at T=2,048 and beyond it cannot be reached at any batch size, because KV traffic alone exceeds the byte budget
+  # this is the ceiling that grouped-query attention and KV quantisation are actually raising. Both cut `kv`, which lifts T*, which lifts this entire curve -- so they are not merely memory-capacity optimisations, they raise the best throughput the hardware can be made to deliver. It also explains the shape of real serving systems: long-context requests are bandwidth-bound no matter how many of them you batch, which is why they are scheduled and priced differently from short ones.
+
+11.3  What that predicts for per-token latency
+------------------------------------------------------------------------------
+  eq:  t_token >= (P * b_w + B * T * kv) / bandwidth
+       a lower bound from bytes alone, ignoring arithmetic entirely
+  model                          context  weight bytes  KV bytes read  ms/token (bound)  tok/s (bound)
+  -----------------------------  -------  ------------  -------------  ----------------  -------------
+  8B, grouped-query (H_kv = 8)     2,048      15.0 GiB       0.25 GiB              8.01          124.9
+  8B, grouped-query (H_kv = 8)    32,768      15.0 GiB       4.00 GiB              9.98          100.2
+  70B, grouped-query (H_kv = 8)    2,048     131.5 GiB       0.62 GiB             69.58           14.4
+  70B, grouped-query (H_kv = 8)   32,768     131.5 GiB      10.00 GiB             74.52           13.4
+  [PASS] the context length at which KV traffic doubles decode latency is exactly S11's memory crossover
+         T* = 122,528 tokens, the same number at which the cache equals the weights in size -- one crossover, showing up once as a memory limit and once as a latency limit
+  # worth stating because context length is usually discussed as a memory budget only. It is also a latency budget: past T* every decoded token spends more time reading the cache than reading the model. For an agent, whose transcript only ever grows, that is a per-step tax that rises across the run.
+
+11.4  A semantic cache's threshold sells correctness to buy hit rate
+------------------------------------------------------------------------------
+  eq:  hit iff max_j cos(q, k_j) >= tau
+       and a hit is *false* when the matched entry answered a different question
+  distinct intents                   24
+  queries                            600
+  within-intent similarity           0.85 mean
+  cross-intent, same topic group     0.62 mean, 0.84 at the closest
+  # the ranges overlap, so no threshold separates a paraphrase from a different question about the same topic. That is not a defect of the embedding, it is the situation
+  threshold tau  hit rate  of hits, wrong  false hits / queries  entries stored
+  -------------  --------  --------------  --------------------  --------------
+            0.5     98.2%           58.4%                 57.3%              11
+            0.6     97.7%           44.7%                 43.7%              14
+            0.7     96.0%            3.5%                  3.3%              24
+           0.75     95.8%            0.7%                  0.7%              25
+            0.8     93.2%            0.2%                  0.2%              41
+           0.85     79.8%            0.0%                  0.0%             121
+  [PASS] hit rate and false-hit rate move together, so no threshold gives both
+         tau=0.50 hits 98% with 57% of all queries answered wrongly; tau=0.85 hits 80% with 0.0% wrong
+
+  eq:  E[loss] = (1 - h) * c_compute + f * c_error
+       h hit rate, f false-hit rate per query; the optimum depends on the ratio c_error / c_compute and on nothing else
+  cost of a wrong answer (x one inference)  optimal tau  expected loss
+  ----------------------------------------  -----------  -------------
+                                         0          0.5          0.018
+                                         1         0.75          0.049
+                                         5         0.75          0.077
+                                        25          0.8          0.118
+                                       200         0.85          0.202
+  [PASS] the optimal similarity threshold is set by the cost of being wrong, not by the embedding model
+         optimal tau moves from 0.5 when a wrong answer is free, to 0.85 when it costs 200x an inference
+  # so there is no such thing as a good default threshold, and a vendor quoting one is quoting an assumption about your error costs. Note also which number is easy to measure and which is not: hit rate needs only the cache's own logs, while false-hit rate needs ground truth about query equivalence that production systems do not have. The measurable half is the flattering half.
+
+11.5  TTL bounds staleness, and stops working when the world moves fast
+------------------------------------------------------------------------------
+  eq:  P(stale) = 1 - (1 - e^{-rT}) / (rT)
+       Poisson writes at rate r, entry age uniform on [0, T]
+  TTL s  writes/s    rT  P(stale) analytic  simulated  difference
+  -----  --------  ----  -----------------  ---------  ----------
+     60    0.0005  0.03            0.01485    0.01487       2e-05
+     60     0.005   0.3            0.13606    0.13617     0.00011
+     60      0.05     3            0.68326      0.684     0.00073
+    300     0.005   1.5            0.48209    0.48146     0.00063
+    900     0.005   4.5            0.78025    0.78124     0.00099
+  [PASS] the derived staleness probability matches simulation
+         worst difference 0.00099 over 200,000 draws per row
+  [PASS] in the slow-write limit staleness is approximately rT/2
+         rT = 0.0300 gives P = 0.01485 against rT/2 = 0.01500
+  [PASS] once rT exceeds about 3, shortening the TTL stops helping much
+         rT = 3.0 already gives P(stale) = 0.683; the entry is more likely wrong than right
+  # this is S13.5's non-idempotent repeat and a fact store's TTL seen from a third side. One cause: a cached value is a claim about a world that has moved on, and the only sound fix is to key the entry on a version of that world rather than on elapsed time. TTL is a bet that the world is slow.
+
+11.6  p95 leaves p50 behind long before the queue looks busy
+------------------------------------------------------------------------------
+  eq:  W ~ Exponential(mu(1 - rho)),  rho = lambda / mu
+       M/M/1 sojourn time; the mean is 1/(mu - lambda), hyperbolic in load
+  utilisation  p50 ms  p95 ms  p95/p50  p50 sim  p95 sim
+  -----------  ------  ------  -------  -------  -------
+          0.3     248    1070     4.32      249     1081
+          0.5     347    1498     4.32      347     1517
+          0.7     578    2496     4.32      577     2480
+          0.9    1733    7489     4.32     1724     7004
+         0.95    3466   14979     4.32     3296    12855
+  [PASS] the closed form agrees with simulation while the queue is not saturated
+         every percentile within 12% of simulation at utilisation <= 0.70, over 120,000 requests per row
+  sampled p95 error vs analytic, by utilisation 0.3: 1.0%  0.5: 1.3%  0.7: 0.6%  0.9: 6.5%  0.95: 14.2%
+  [PASS] the sampled p95 gets less reliable as utilisation rises, at fixed sample size
+         1.3% error at utilisation <= 0.70 against 14.2% at 0.95, from the same 120,000 requests -- sojourn times are strongly correlated near saturation, so the effective sample size is far below the nominal one
+  # that second result is the more useful one operationally. Near saturation a queue's own tail measurements are noisy and biased by whatever transient the window happened to catch, so a dashboard p95 taken from a busy hour is not a reliable estimate of anything. The closed form, which needs only utilisation, is better behaved than the measurement it is usually checked against
+  [PASS] latency is hyperbolic in load, not linear
+         raising utilisation from 0.5 to 0.9 -- less than double the load -- multiplies p50 by 5.0x
+  [PASS] the p95/p50 ratio is constant, so a healthy ratio proves nothing
+         ratio is 4.32 at every utilisation, because the sojourn distribution is exponential at all loads -- only its scale moves
+  # the constant ratio is the trap. Watching p95/p50 for a warning gives none: it reads the same at 30% load and 95% load while the absolute numbers have gone up eightfold. Utilisation is the leading indicator, and it is the one least often on the dashboard.
+
+  quantity            value
+  ------------------  --------
+  single request p50  1733 ms
+  single request p95  7489 ms
+  6-step task p50     14158 ms
+  6-step task p95     26400 ms
+  6 x request p50     10397 ms
+  [PASS] a multi-step task's median exceeds the number of steps times the request median
+         14158 ms against 10397 ms, because the sum of exponentials has its mass shifted right of the sum of medians
+  [PASS] but the task p95 is far below the number of steps times the request p95
+         26400 ms against 44936 ms: independent steps average out, so the tails do not simply add
+  # both directions matter for an agent. Budgeting a task at steps x p50 underestimates it; budgeting at steps x p95 wildly overestimates it. The distribution has to be composed, not its percentiles -- and this is the benign case, where steps are independent. S4 covers what happens when a late step causes a retry.
+
+11.7  Cost per token is billed; cost per completed task is what you pay
+------------------------------------------------------------------------------
+  eq:  cost_per_task = tokens_per_attempt * price_per_token / P(success)
+       a failed attempt is billed in full and delivers nothing
+  configuration        $/Mtok  tokens/attempt  P(success)  $/attempt  $/completed task
+  -------------------  ------  --------------  ----------  ---------  ----------------
+  cheap, weaker          0.15           5,400        0.55    0.00081          0.001473
+  cheap, more steps      0.15           9,200        0.72    0.00138          0.001917
+  mid                     0.6           4,800        0.86    0.00288          0.003349
+  strong, fewer steps       3           3,100        0.94     0.0093          0.009894
+  [PASS] dividing by the success rate compresses the price spread but does not reverse it
+         a 20x spread in price per token becomes 6.7x per completed task -- so per-token pricing overstates the real difference, while still ranking the cheap model first
+
+  eq:  total = tokens*price + (1 - P) * c_escalate
+       one attempt, then a human picks up whatever failed
+  configuration        escalation cost  $/task total  token share of total
+  -------------------  ---------------  ------------  --------------------
+  cheap, weaker                  $0.00       0.00081                100.0%
+  cheap, weaker                  $2.00       0.90081                  0.1%
+  cheap, more steps              $0.00       0.00138                100.0%
+  cheap, more steps              $2.00       0.56138                  0.2%
+  mid                            $0.00       0.00288                100.0%
+  mid                            $2.00       0.28288                  1.0%
+  strong, fewer steps            $0.00        0.0093                100.0%
+  strong, fewer steps            $2.00        0.1293                  7.2%
+  [PASS] with a realistic cost of failure the ranking inverts completely
+         at $2.00 per escalation the 20x-priced model is cheapest overall ($0.129/task) and the cheapest-per-token model is dearest ($0.901/task), a 7.0x difference the token bill reverses
+  [PASS] and once failure has any material cost, the token bill is a rounding error
+         tokens are under 10% of total cost for every configuration once escalation is priced; the largest share is 7.2%
+  escalation cost at which the ranking flips $0.03
+  # this is the closing result of the article, and it is the reason the next one exists. Price per token is the only term in the table a vendor controls and the only one anyone negotiates, and at any realistic cost of failure it is noise. Everything that actually determines the bill -- tokens per attempt, and above all P(success) -- is a property of the loop wrapped around the model, not of the model. Tokens per attempt comes from S13's step count. P(success) is what the entire agentic stack exists to raise, and what the next article measures. Cost cannot be optimised at the inference layer, because cost is not determined there.
+
+s12 claims 20/20 passed in 0.57s
+==============================================================================
+

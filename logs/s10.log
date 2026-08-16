@@ -1,0 +1,195 @@
+==============================================================================
+s10  Decoding: from a distribution to a token
+      two edits to one vector, a search over sequences, and what maximising probability actually returns
+==============================================================================
+
+3.1  The model hands over a vector, not a token
+------------------------------------------------------------------------------
+  eq:  decode : Delta(V) -> V
+       a separate function with its own parameters, applied to the output of f; nothing in the model constrains it and nothing in training saw it
+  contexts measured                  576 (every state of the model)
+  quantity                           min  median     max
+  ------------------------------  ------  ------  ------
+  entropy of p (bits)             0.9478  2.3164   4.386
+  probability of the top token    0.0846  0.4575  0.8913
+  tokens holding 99% of the mass      17      19      23
+  [PASS] how much the model is actually choosing between varies by more than a bit across its own contexts
+         entropy runs from 0.948 to 4.386 bits, a spread of 3.438 bits and so more than a doubling of the effective number of options
+  # this spread is the reason a decoder set once and applied everywhere is a compromise: the same setting meets a nearly certain continuation and a nearly open one, and it cannot be right for both
+
+3.2  Temperature reweights, and never reorders
+------------------------------------------------------------------------------
+  eq:  p_i(T) = exp(z_i / T) / sum_j exp(z_j / T) = p_i^(1/T) / sum_j p_j^(1/T)
+       T < 1 sharpens, T > 1 flattens; the second form makes the invariance obvious, since x -> x^(1/T) is increasing for every T > 0
+  context = ('the', 'model')
+     T  H bits   max p  tokens p>0.01  argmax
+  ----  ------  ------  -------------  ------
+  0.25  0.5544  0.8758              2  and
+   0.5  1.0475  0.7034              3  and
+     1  2.0846  0.4944              5  and
+     2  3.7691  0.2422             23  and
+     8  4.5482  0.0711             24  and
+  [PASS] temperature preserves the entire ranking of the vocabulary, not merely the top token
+         the full argsort of all 24 tokens is identical at every temperature in (0.25, 0.5, 1.0, 2.0, 8.0), at all 576 contexts
+  [PASS] entropy rises and the top token's share falls monotonically with temperature, at every context
+         checked pairwise across 5 temperatures at 576 contexts
+  [PASS] high temperature approaches the uniform distribution
+         worst divergence from uniform at T=64 is 0.0006 bits, over all 576 contexts
+  # this is the load-bearing negative result of the section. Temperature is a confidence dial, not a correctness dial. If the model ranks the wrong token first, no temperature reorders it, and the only thing lowering the temperature achieves is that the wrong token is chosen more consistently
+
+3.3  Top-k is a fixed count against a distribution that is not fixed
+------------------------------------------------------------------------------
+   k  least mass kept    mean  most mass kept  spread
+  --  ---------------  ------  --------------  ------
+   1           0.0846  0.4874          0.8913  0.8067
+   2           0.1629  0.7118          0.9051  0.7422
+   3           0.2364  0.8264          0.9249  0.6885
+   5           0.3585  0.9084          0.9422  0.5837
+  10           0.6208  0.9523           0.968  0.3472
+  [PASS] a fixed k keeps very different amounts of the distribution depending on the context
+         at k=3 the retained mass runs from 0.236 to 0.925, a spread of 0.689
+  true mass deleted by k=3, mean     0.1193
+  true mass deleted by k=3, worst context 1
+  contexts where the top 3 contains no reachable token 4 of 576
+  [PASS] top-k deletes outcomes the process genuinely produces
+         on average 11.9% of the true next-token mass falls outside the model's top 3, rising to 100.0% at the worst context
+  # the source here has five reachable tokens per context, so k=3 is guaranteed to cut two of them. The bound is a property of this demonstration, not of language, but the shape of the problem is general: k is chosen once and the number of plausible continuations is not constant
+  # the worst context is worth reading carefully rather than as an error. Deleting all of the true mass means the model ranked three unreachable tokens above every reachable one, which happens at contexts it saw too few times to estimate and where it has fallen back on the lower orders. Truncation does not cause that failure, it makes it irreversible: sampling from the full distribution would still have reached a real continuation sometimes
+
+3.4  Top-p sizes the shortlist from the distribution itself
+------------------------------------------------------------------------------
+  top-p  smallest nucleus    mean  largest nucleus  mean D_KL(kept || full) bits
+  -----  ----------------  ------  ---------------  ----------------------------
+    0.5                 1   1.686                8                        0.6257
+    0.8                 1   3.108               15                        0.2308
+    0.9                 2   4.616               18                        0.1384
+   0.95                 7   9.594               20                        0.0692
+   0.99                17  18.698               23                        0.0127
+  [PASS] the nucleus grows with the mass threshold at every context
+         checked at all 576 contexts across five thresholds, not on the averages
+  nucleus size at p=0.9  contexts  mean entropy (bits)
+  ---------------------  --------  -------------------
+                      3        62               1.6294
+                      4       209               2.1121
+                      5       264                2.444
+                      6        28               2.6051
+  [PASS] the nucleus size tracks the model's uncertainty rather than being set by hand
+         mean entropy rises with every nucleus size holding at least ten contexts: 1.629 < 2.112 < 2.444 < 2.605
+  # that is the entire argument for nucleus over top-k, and it is worth stating as what it is: top-p is an adaptive k, chosen per position from the distribution the model just produced
+
+3.5  The two dials interact, and their order is a third parameter
+------------------------------------------------------------------------------
+  contexts where the two orders admit different tokens 576 of 576
+  [PASS] temperature before truncation and truncation before temperature are different decoders
+         at 100.0% of contexts the surviving token set differs, so 'temperature 1.5, top-p 0.9' does not specify a decoder without saying which happens first
+  [PASS] no setting of either dial can change what greedy decoding returns
+         the argmax is unchanged at all 576 contexts under temperature 1.5, top-k 3 and top-p 0.5
+  # both facts are consequences of the same thing. These operations are monotone in the probabilities, so they move mass without moving rank. They change what sampling does. They cannot change what argmax does
+
+3.6  Decoding is search, and greedy is not optimal
+------------------------------------------------------------------------------
+  eq:  argmax_{x_1..x_T} prod_t p(x_t|x_<t)  !=  the sequence of per-step argmaxes
+       the product of locally best choices is not the best product
+  [PASS] the dynamic program agrees with exhaustive search over 13,824 sequences
+         DP -2.7151667084 vs brute force -2.7151667084 bits (the reads with)
+
+  Regret is how many bits the greedy path gives up against the exact optimum,
+  evaluated at every one of the 576 start contexts rather than a chosen one.
+  horizon T  % contexts greedy loses  mean regret bits  max regret bits  max prob. ratio
+  ---------  -----------------------  ----------------  ---------------  ---------------
+          2                     15.5            0.0664           1.5169             2.86
+          3                     34.4            0.1559            1.918             3.78
+          5                     55.4            0.4494           3.1964             9.17
+          8                     80.2            0.9908           4.1291             17.5
+         12                     90.3            1.9501           5.3947            42.07
+  [PASS] greedy decoding is suboptimal at some start contexts
+         at T=3 greedy loses at 34.4% of the 576 contexts; at T=12, 90.3%
+  [PASS] the greedy shortfall grows with the horizon
+         mean regret 0.0664 bits at T=2 rising to 1.9501 bits at T=12
+  # greedy is often optimal and sometimes badly wrong, and which one you get depends on the context, not on the decoder. That is why a single well-chosen example proves nothing here and the sweep over all 576 start states does
+
+  worst context at T=5: ('grows', 'engine'), optimum -3.5566 bits
+  beam width  log2 p found  regret bits  optimal?
+  ----------  ------------  -----------  --------
+           1        -6.753       3.1964  no
+           2       -3.5566            0  yes
+           4       -3.5566            0  yes
+           8       -3.5566            0  yes
+          16       -3.5566            0  yes
+          32       -3.5566            0  yes
+  [PASS] widening the beam never increases regret and eventually removes it
+         regret 3.1964 bits at width 1 falling to 0.0e+00 at width 32
+  # the greedy path takes a locally strong token that leads into a worse continuation, and the beam recovers it by refusing to commit. Exhaustive search is V^T -- 13,824 here, around 10^15 for three tokens of a real vocabulary -- so production decoding is always an approximation to an objective nobody can compute
+
+3.7  What maximising probability actually returns
+------------------------------------------------------------------------------
+  value iteration sweeps run         600
+  last sweep at which the policy changed 104
+  [PASS] value iteration settles on a single policy rather than oscillating
+         the argmax policy over all 576 states was unchanged for the final 496 sweeps
+  # the optimal policy is a map from each of the 576 states to one token. A map from a finite set into itself, followed forever, has to revisit a state; from that point it repeats. Degenerate repetition under likelihood-maximising decoding is not a quirk of neural networks, it is the pigeonhole principle
+  quantity                      min  mean  max
+  ----------------------------  ---  ----  ---
+  steps before a state repeats    0  8.14   18
+  period of the cycle entered     1     1    1
+  distinct contexts lying on any cycle 1 of 576
+  [PASS] the most probable continuation collapses onto a small recurring set of states
+         1 of 576 contexts lie on any cycle of the optimal policy, and the longest cycle is 1 states
+  # in this demonstration the cycle turns out to have period one: the optimal policy walks into a single state and emits the same token from then on. The pigeonhole argument only guarantees some period, so period one is a fact about this model rather than a general one. It is also the sharpest possible version of the point, and the reason a real decoder's repetition looks like a repeated phrase rather than a repeated word is that its state is the whole prefix, so the cycle it finds is longer
+  mean distinct bigrams in 40 tokens, argmax path 7.15
+  mean distinct bigrams in 40 tokens, sampled 37.22
+  [PASS] sampling covers several times more of the state space than the optimum does
+         37.2 distinct bigrams against 7.1, over 40 tokens from each of the 576 start contexts
+  [PASS] the likelihood-maximising path repeats itself and the sampled one does not
+         repeated-bigram rate 0.817 against 0.046
+
+  argmax  : and each no and and and and and and and and and and and and and and and
+  sampled : model the agent loop loop engine then engine no model step stops context one stops then the agent
+  # this is the sentence the section exists for. Beam search is a better search than greedy, and searching harder makes the text worse, because the objective is not the one anybody wants. Likelihood ranks a repeated phrase above a varied one, and it is right to: a repeated phrase really is more probable
+
+3.8  Sampling buys the shape of the process with likelihood
+------------------------------------------------------------------------------
+  decoder             mean log2 p per token
+  ------------------  ---------------------
+  exact optimum                     -0.9545
+  greedy                             -1.133
+  top-p 0.9 sampling                -1.7497
+  pure sampling                     -2.2665
+  [PASS] the decoders order exactly by how much searching they do
+         -0.9545 > -1.1330 > -1.7497 > -2.2665
+  D_KL(sampled tokens || true process) 0.0007 bits
+  D_KL(argmax tokens || true process) 0.3576 bits
+  [PASS] the decoder with the higher likelihood produces the less faithful text
+         0.358 bits against 0.001 bits of divergence from the true unigram distribution of the process
+  # two rankings, opposite directions, same four decoders. That is the whole trade and it has no resolution inside the decoder: probability of the output and resemblance to the source are different objectives, and any setting picks a point between them
+
+3.9  Speculative decoding: fewer calls, identical distribution
+------------------------------------------------------------------------------
+  # the draft is the same counts read as a bigram, so it ignores the token two back. It is a genuinely worse model, which is the point: the argument below never assumes the draft is any good
+  eq:  P(emit x) = min(p(x), q(x)) + max(p(x) - q(x), 0) = p(x)
+       accept with probability min(1, p/q), otherwise draw from the normalised positive part of p - q
+  [PASS] verified speculative decoding emits exactly the target distribution, at every context
+         largest absolute deviation 3.331e-16 over all 13824 probabilities, computed algebraically rather than sampled
+  [PASS] the acceptance rate is one minus the total variation distance between draft and target
+         agreement to 2.78e-16 at all 576 contexts
+  mean acceptance rate, weighted by how often each context occurs 0.3022
+  ceiling on tokens per verification, 1/(1-a) 1.433
+  draft length k  tokens per verification, measured  series at the mean rate  series averaged per context  accept rate over verified positions
+  --------------  ---------------------------------  -----------------------  ---------------------------  -----------------------------------
+               1  1.2920 +/- 0.0072                                   1.3022                       1.3022                                0.292
+               2  1.3935 +/- 0.0102                                   1.3936                       1.3963                               0.3016
+               4  1.4278 +/- 0.0124                                   1.4296                       1.4366                                0.302
+               6  1.4518 +/- 0.0129                                   1.4328                       1.4415                               0.3115
+               8  1.4280 +/- 0.0120                                   1.4331                       1.4424                               0.2997
+  # the measured column carries the standard error of a 4,000-block run, and past k=4 that error is larger than the quantity still being gained, which is why it stops being monotone. The gap the next claim is about is between the two exact columns, not between the simulated one and anything
+  [PASS] a decoder whose acceptance rate varies beats one with the same average rate everywhere
+         tokens per verification is a sum of powers of the acceptance rate and so convex in it, which is Jensen's inequality rather than a measurement artifact: k=2: 1.3963 > 1.3936, k=4: 1.4366 > 1.4296, k=8: 1.4424 > 1.4331
+  [PASS] lengthening the draft has sharply diminishing returns
+         the second drafted token adds 0.0941 tokens per verification; each of the fifth through eighth adds 0.0015, against a ceiling of 1.433 that no draft length passes
+  # the technique buys latency and cannot buy or cost quality, which is unusual enough to be worth saying plainly. Its ceiling is set by a distance between two distributions, and the reason verifying k tokens costs about what verifying one costs is the memory-bound decode that S12 measures
+
+  # where we are: a token has been chosen. What that costs, once the context is thousands of tokens long and the same prefix is read again on every step, is S11
+
+s10 claims 24/24 passed in 1.30s
+==============================================================================
+

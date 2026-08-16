@@ -1,0 +1,156 @@
+==============================================================================
+s08  The alphabet: what a token is
+      words, characters, and the encoding that refuses both bills
+==============================================================================
+
+1.1  A word vocabulary never closes
+------------------------------------------------------------------------------
+  training words                     19373
+  held-out words                     4304
+
+  sample:  Melaca bakada fe feli jelifiha mikice hedi jelifiha baga gahibefi fagefibe li . Gahibefi di faca
+  # the source has a fixed lexicon of 400 common words, plus a 3% rate of words it has never produced before and a 2% rate of numbers; that open tail is the property real text has and a closed generator does not
+  words read  distinct types  new types since last row
+  ----------  --------------  ------------------------
+        2000             444                       444
+        4500             675                       231
+        9000             952                       277
+       18000            1389                       437
+  [PASS] the type inventory is still growing when the corpus runs out
+         103 word types appear for the first time in the final tenth of the corpus
+
+  word vocabulary cap                1000 types
+  held-out words outside it          227 of 4304
+  out-of-vocabulary rate             5.274 %
+  distinct types collapsed onto one symbol 223
+  [PASS] a capped word vocabulary leaves part of held-out text unrepresentable
+         5.27% of held-out words, spanning 223 distinct types, all arriving as the same symbol
+  # this is an information channel failure in the sense Part 2 defined: distinct inputs become identical before the network sees them. Training cannot undo it, because there is nothing left to learn from
+
+1.2  Characters close the alphabet and lengthen the sequence
+------------------------------------------------------------------------------
+  character vocabulary               34 symbols
+  characters: .0123456789BCDFGHJKLMabcdefghijklm
+  [PASS] a character vocabulary has no out-of-vocabulary rate at all
+         34 distinct held-out characters, all present in the 34-symbol training set
+  letters per word, held out         4.838
+  characters per word including its space 5.838
+  # a character-level model has to emit the spaces too, so the length to compare against is the whole string and not just its letters
+  # closing the alphabet costs sequence length, and Part 2 showed attention work carries a term in the square of the sequence length; the multiplier on that term is measured once byte-pair encoding gives something to compare against, in 1.4
+
+1.3  Byte-pair encoding, one merge at a time
+------------------------------------------------------------------------------
+  eq:  merge_k = argmax_(a,b) count(a,b);   V = base + {a+b : k = 1..m}
+       count over the corpus written in the symbols surviving the previous k-1 merges, so every merge changes what the next one is counting
+  merges performed                   350
+  base characters                    35
+  vocabulary size                    385 entries
+
+   k  pair merged       new token    occurrences  corpus tokens after
+  --  ----------------  -----------  -----------  -------------------
+   1  'g' + 'a'         'ga'                4140               108606
+   2  'e' + 'f'         'ef'                3896               104710
+   3  'h' + 'i'         'hi'                3769               100941
+   4  'ef' + 'i'        'efi'               3195                97746
+   5  '_' + 'ga'        '_ga'               3178                94568
+   6  'hi' + 'b'        'hib'               3001                91567
+   7  'hib' + 'efi'     'hibefi'            2987                88580
+   8  'c' + 'a'         'ca'                2767                85813
+   9  '_ga' + 'hibefi'  '_gahibefi'         2766                83047
+  10  'l' + 'i'         'li'                2389                80658
+  11  '_' + 'ca'        '_ca'               2147                78511
+  12  '_' + 'f'         '_f'                1770                76741
+  # the first merges are syllables, because syllables are what this text is made of; the later ones are whole frequent words, which is why a common word ends up as a single token and a rare one does not
+  [PASS] no merge produces a string the vocabulary already has, so the vocabulary size is exactly the base plus the merge count
+         35 characters + 350 merges = 385 distinct entries
+  [PASS] each merge removes exactly as many tokens as the pair had occurrences
+         predicted and recounted corpus totals agree at all 350 merges, worst disagreement 0 tokens
+  # this is the claim that catches the overlap bug: counting the positions of a repeated pair rather than the merges it will actually support makes this number non-zero and nothing else in the section notices
+  [PASS] encoding and decoding held-out text is an exact round trip
+         4304 words, 25127 characters, compared as strings rather than approximately
+
+  text  :  Milefe ca dami heje jimide ca faki gilije ciji
+  tokens:  _Milefe | _ca | _da | mi | _heje | _jimide | _ca | _faki | _gi | li | je | _ciji
+
+1.4  What the merges buy, and where they stop buying it
+------------------------------------------------------------------------------
+  merges  vocabulary  held-out tokens  tokens per word  characters per token
+  ------  ----------  ---------------  ---------------  --------------------
+       0          35            25128           5.8383                     1
+      25          60            13404           3.1143                1.8746
+      50          85            10177           2.3645                 2.469
+     100         135             7743            1.799                3.2451
+     200         235             6282           1.4596                3.9998
+     350         385             5593           1.2995                4.4926
+  [PASS] more merges never lengthen the encoding
+         5.838 >= 3.114 >= 2.365 >= 1.799 >= 1.460 >= 1.299
+  [PASS] the return on each additional merge falls as the vocabulary grows
+         tokens saved per word per merge: 1.09e-01 > 3.00e-02 > 1.13e-02 > 3.39e-03 > 1.07e-03
+  # the first merges take the pairs that occur everywhere and the last ones take pairs that occur in a handful of words, so vocabulary size is a decision with a knee in it rather than a free parameter
+  characters per token at full vocabulary 4.4926
+  sequence-length multiplier, characters vs tokens 4.493 x
+  multiplier on the quadratic attention term 20.18 x
+  [PASS] moving to characters multiplies the quadratic term of attention by the square of the length ratio
+         a character sequence is 4.49x longer, so the T^2 term is 20.2x larger for identical content
+
+1.5  A token is not a word, and the ratio is not a constant
+------------------------------------------------------------------------------
+  sentences measured                 304
+  mean tokens per word               1.3215
+  minimum over sentences             1
+  maximum over sentences             1.9231
+  ratio of maximum to minimum        1.923
+  [PASS] there is no fixed conversion between words and tokens
+         tokens per word ranges from 1.00 to 1.92 across 304 sentences of the same corpus
+  # a prompt budget quoted in words is a budget with an unknown error bar; the same word count can differ by more than half again in what it costs, and the direction of the error depends on how ordinary the text is
+
+1.6  The same content in a second script costs more
+------------------------------------------------------------------------------
+  [PASS] the two texts are the same content in different characters
+         7605 characters each, one the image of the other under a one-to-one character map
+  tokenizer training mix      merges in A  merges in B  tokens for the A text  tokens for the B text   B / A
+  --------------------------  -----------  -----------  ---------------------  ---------------------  ------
+  90% script A, 10% script B          166           50                   2015                   3094  1.5355
+  50% script A, 50% script B          107          108                   2290                   2284  0.9974
+  [PASS] identical content costs more tokens in the script the tokenizer saw less of
+         3094 tokens against 2015 for the same 7605 characters, a factor of 1.54
+  [PASS] balancing the training mix removes the penalty
+         B / A falls from 1.535 to 0.997 when the two scripts get equal shares of the same total corpus
+  # the two scripts are the same text under a character substitution, so nothing about either language explains the gap. The tokenizer's training mix explains all of it. Since inference is billed per token, that mix sets the price of the same work in different markets, and it is fixed long before anyone writes a prompt
+
+1.7  What a token hides: the characters inside it
+------------------------------------------------------------------------------
+  held-out word occurrences          4304
+  arriving as exactly one token      3585
+  [PASS] most held-out word occurrences reach the model as a single token
+         83.3% of 4304 occurrences, whose characters are therefore not separately addressable
+  characters in a single-token word  1 to 8
+  [PASS] token count carries no information about character count
+         single-token words in this vocabulary run from 1 to 8 characters
+  # spelling, reversing, counting a letter and rhyming are all character-level questions asked of a model whose input has no character level. The information is not absent from the world, it is absent from the representation, and recovering it means inverting the merge table from examples
+
+  tokens  three-digit numbers encoded that way
+  ------  ------------------------------------
+       2                                    10
+       3                                   790
+       4                                   100
+  [PASS] consecutive numbers do not share a segmentation
+         the 900 three-digit numbers take 10 at 2 tokens, 790 at 3 tokens, 100 at 4 tokens, so digit position is not a fixed feature of the input
+
+  word      lower case  capitalised
+  --------  ----------  -----------
+  gahibefi  _gahibefi   _Gahibefi
+  ca        _ca         _Ca
+  li        _li         _Li
+  feli      _feli       _Feli
+  cadeja    _cadeja     _Cadeja
+  baga      _baga       _Baga
+  [PASS] a capitalised word and its lower-case form need not share a single token
+         20 of the 20 most frequent words have no token in common with their capitalised form
+  # the model is not told that these are the same word. It has to infer it, from data, for every variant of every word, which is one of the quieter costs of the whole scheme
+
+  # where we are: the alphabet is closed, nothing is unrepresentable, and the sequence is about as short as characters allow. What the model now reads is a sequence of vocabulary indices, and S9 asks what the function reading them actually is
+
+s08 claims 17/17 passed in 1.83s
+==============================================================================
+

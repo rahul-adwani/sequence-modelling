@@ -1,0 +1,11 @@
+# The eleven sections need NumPy and nothing else. That is deliberate: a result
+# a reader cannot rerun is not a result, and every dependency is one more way
+# for the rerun to fail.
+numpy>=1.24
+
+# Figures only. `python run_all.py` skips figure generation if this is absent,
+# and every number in every log is produced without it.
+matplotlib>=3.7
+
+# Tests only.
+pytest>=7.4

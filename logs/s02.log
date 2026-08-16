@@ -1,0 +1,95 @@
+==============================================================================
+s02  Recurrence: sharing weights across time
+      one matrix reused at every step, and what that does to the gradient
+==============================================================================
+
+2.1  The obvious fix does not work
+------------------------------------------------------------------------------
+  Part 1's first weight matrix has shape (8, 4): eight hidden units reading
+  four features. The 4 is not a choice, it is the width of an IRIS row.
+
+  The obvious repair is to give every position in the sequence its own
+  weights. Two things go wrong, and the second is worse.
+  sequence length T  parameters, per-position weights  parameters, shared  ratio
+  -----------------  --------------------------------  ------------------  -----
+                  5                               300                  60     5x
+                 20                             1,200                  60    20x
+                100                             6,000                  60   100x
+               1000                            60,000                  60  1000x
+  [PASS] per-position weights make the model's size depend on the longest sequence it may ever see
+         60,000 parameters at T=1,000 against 60 shared, and a sequence one token longer than anything seen in training has no weights at all
+  # the second problem has no table. With separate weights per position, whatever the network learns about a word at position 3 teaches it nothing about the same word at position 40 -- they are handled by different parameters that never see each other's gradients. Sharing the weights is not a memory optimisation. It is the statement that the rule for reading the next element does not depend on where you are in the sequence.
+
+2.2  The recurrent network
+------------------------------------------------------------------------------
+  eq:  s_t = tanh(W s_{t-1} + U x_t + b)
+       the hidden state: the network's entire memory of everything before t
+  eq:  y_t = V s_t
+       the output, read off the state
+
+  W, U and V are the same at every step. The state s_t is a fixed-width
+  vector no matter how long the sequence is -- which is the whole trick,
+  and later the whole problem.
+  hidden width d                     6
+  parameters                         84
+  sequence length  states computed  final output width
+  ---------------  ---------------  ------------------
+                3                3                   3
+               10               10                   3
+               50               50                   3
+              200              200                   3
+  [PASS] the same parameters process any sequence length
+         84 parameters handled lengths 3, 10, 50, 200 unchanged
+
+2.3  Backpropagation through time
+------------------------------------------------------------------------------
+  Unroll the T steps and it is a T-layer network -- so Part 1's backward
+  pass applies with no change. The one new feature is that every layer
+  shares the same W, so the gradient does not arrive from one place.
+  eq:  dJ_t/dW = sum_{k=0..t} (dJ_t/dy_t)(dy_t/ds_t)(ds_t/ds_k)(ds_k/dW)
+       a sum over every step at which W acted
+  eq:  delta_{k-1} = W^T diag(1 - s_{k-1}^2) delta_k
+       Part 1's recursion; 1 - s^2 is tanh'(z) written through the activation
+  eq:  dJ/dW = sum_k delta_k s_{k-1}^T
+       accumulate, do not overwrite
+  relative L2 error vs finite differences 4.810e-10
+  [PASS] the derived backward pass through time is correct
+         analytic gradient agrees with central finite differences to 4.8e-10 over all 36 recurrent weights, on a 12-step sequence
+  [PASS] the accumulated gradient equals the sum of its per-step contributions
+         sum over k of delta_k s_{k-1}^T reproduces dJ/dW exactly, which is the slide's sum made literal
+
+2.4  Which steps actually supply the gradient
+------------------------------------------------------------------------------
+  The loss is scored on the final output only. So every one of the 12 terms
+  in that sum is a message from a different point in the past, saying how
+  much W's action *there* mattered to the answer *here*.
+  step k  distance back from the loss  ||contribution||  share of total
+  ------  ---------------------------  ----------------  --------------
+       1                           11                 0           0.00%
+       2                           10         0.0791139           0.56%
+       3                            9          0.123779           0.87%
+       6                            6          0.323733           2.28%
+       9                            3           1.50973          10.66%
+      11                            1           2.78098          19.63%
+      12                            0           5.29682          37.38%
+  # k = 1 is exactly zero for a structural reason rather than a numerical one: the contribution at step k is delta_k s_{k-1}^T, and s_0 is the zero vector, so W had nothing to act on at the first step. Every other row is the gradient genuinely arriving from that distance.
+  [PASS] the gradient is dominated by the steps nearest the loss
+         the last three steps contribute 72.0% of the total magnitude; the first three contribute 1.43%
+  # this is the failure in miniature, and everything after it in this article is a response. The network can only learn to use information from step 1 if the gradient reaching step 1 is large enough to move the weights. Here it is roughly 2e-02 of the signal arriving from the recent steps. S3 shows this is not a quirk of this example -- it is geometric, and one number about W decides the rate.
+
+2.5  The cost that has nothing to do with gradients
+------------------------------------------------------------------------------
+  s_t cannot be computed until s_{t-1} exists. Every step waits for the one
+  before it, however many processors are available.
+  sequence length T  sequential steps required
+  -----------------  -------------------------
+                128                        128
+               1024                       1024
+               8192                       8192
+  [PASS] recurrence forces a number of sequential steps equal to the sequence length
+         s_t depends on s_{t-1} by construction, so no amount of hardware shortens the chain
+  # worth parking rather than solving now. Even a recurrent network that learned perfectly would still read a 8,192-token document in 8,192 dependent steps. When S7 removes recurrence entirely, this is half of what it buys -- and the other half is the gradient problem S3 is about to make precise.
+
+s02 claims 6/6 passed in 0.02s
+==============================================================================
+

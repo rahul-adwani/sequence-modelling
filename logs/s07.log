@@ -1,0 +1,101 @@
+==============================================================================
+s07  The transformer, and arriving at GPT
+      if attention reaches everywhere, the recurrence is redundant
+==============================================================================
+
+7.1  Attention applied to a sequence and itself
+------------------------------------------------------------------------------
+  eq:  Q = X W_q,  K = X W_k,  V = X W_v
+       queries, keys and values are three different views of the *same* sequence
+  eq:  A = softmax(Q K^T / sqrt(d)) V
+       every position scores every position, then averages their values
+
+  In S6 the decoder queried the encoder: two sequences, one attending
+  to the other. Here a sequence attends to itself. Position 1 can read
+  position 40 in a single operation, so nothing needs to be carried
+  forward step by step -- which leaves the recurrence with no job.
+  sequence length                    8
+  attention matrix shape             8 x 8
+  rows summing to 1                  8
+  [PASS] every position produces a distribution over every position
+         all 8 rows are probability distributions over all 8 positions
+
+7.2  The two quantities that changed
+------------------------------------------------------------------------------
+                                         recurrent                self-attention
+  -------------------------------------  -----------------------  ----------------
+  path length between distant positions  O(T) = 999 at T=1,000    O(1) = 1
+  sequential operations                  O(T) = 1,000 at T=1,000  O(1) = 1
+  operations per layer                   O(T d^2)                 O(T^2 d + T d^2)
+  [PASS] self-attention makes the distance between any two positions constant
+         position 1 and position 10,000 are one operation apart, against 9,999 for a recurrent network -- and S3 showed what happens to a gradient crossing 9,999 multiplications
+  [PASS] and removes the sequential dependency entirely
+         all positions are computed at once, so wall-clock training time stops scaling with sequence length and starts scaling with available hardware
+  # the first row also settles S3 quietly. A gradient travelling between two positions no longer passes through a product of T Jacobians, because there is no path of length T -- there is a path of length 1. Gating mitigated the geometric series; self-attention deletes it. The second row is why transformers won commercially: not better per parameter, but trainable at a scale the alternatives could not reach in affordable wall-clock time
+
+7.3  Removing the recurrence removed the word order
+------------------------------------------------------------------------------
+  The recurrence was doing a second job nobody had listed. Reading
+  words one after another is what made the model know which came
+  first. Take it away and the model sees a *set*, not a sequence.
+  max |attention output - permuted output, unpermuted back| 2.220e-16
+  [PASS] self-attention is permutation-equivariant: shuffling the input shuffles the output and changes nothing else
+         agreement to 2.2e-16 -- the mechanism has no way to tell 'dog bites man' from 'man bites dog'
+  # this is not a subtlety, it is a hole. Every architecture up to here got word order for free from the fact that it read the words in order. A transformer has to be told
+
+7.4  Positional encoding puts it back
+------------------------------------------------------------------------------
+  eq:  PE[t, 2i] = sin(t / 10000^(2i/d)),   PE[t, 2i+1] = cos(...)
+       a fixed pattern per position, added to the token representations before the first layer
+  same comparison, with positions added 9.102e-01
+  [PASS] adding positional encodings breaks the permutation symmetry
+         the same shuffle now changes the output by 9.10e-01, against 2.2e-16 without positions
+  [PASS] the encoding gives distinct positions distinct representations
+         no two positions share an encoding, so the model can distinguish them even though the mechanism reading them is order-blind
+  # worth noticing what kind of fix this is. Order is not restored by changing the mechanism -- attention remains permutation-equivariant for ever. It is restored by putting the position *into the data*, so that an order-blind mechanism reading position-tagged inputs behaves as though it could see order. Everything later in this line, from learned to rotary encodings, is a different answer to the same question
+
+7.5  Several attentions at once
+------------------------------------------------------------------------------
+  One attention distribution per position means one weighted average.
+  But a word may relate to its subject and its object and its tense
+  simultaneously, and a single distribution has to choose.
+  eq:  head_h = Attention(X W_q^h, X W_k^h, X W_v^h);  concat, then project
+       d is split across heads, so multi-head attention costs the same as single-head at the same width
+  head  mean attention entropy (bits)
+  ----  -----------------------------
+     0                          1.531
+     1                          1.511
+     2                          1.443
+     3                          1.798
+  uniform over 8 positions would be  3
+  d_model split across heads         32 / 4 = 8
+  [PASS] heads attend differently, so several relations can be represented at once
+         mean entropy ranges 1.443 to 1.798 bits across 4 heads on identical input -- each is a different view
+  [PASS] splitting the width keeps the parameter count unchanged
+         4 heads x 8 dimensions = 32, so multi-head is a reorganisation of the same budget rather than an addition
+
+7.6  The causal mask, and where this article ends
+------------------------------------------------------------------------------
+  The 2017 architecture had an encoder and a decoder, because it was
+  built for translation. For a model that only continues text, the
+  encoder has nothing to encode -- there is one sequence, and each
+  position should see everything before it and nothing after.
+  eq:  mask_ij = 0 if j <= i, else -infinity
+       added to the scores before the softmax, so forbidden weights become exactly zero
+  position i  positions attended  weight on the future
+  ----------  ------------------  --------------------
+           0                   1               0.0e+00
+           3                   4               0.0e+00
+           7                   8               0.0e+00
+  [PASS] with a causal mask each position attends to itself and its past, and nothing else
+         position i attends to exactly i+1 positions and places exactly zero weight on every later one
+  [PASS] the rows are still probability distributions after masking
+         the softmax renormalises over what remains, so masking redistributes attention rather than discarding it
+
+  # that is GPT: a stack of masked self-attention layers with positional encodings, trained to predict the next token, with the softmax-and-cross-entropy output layer this article opened on in S1. Every component has now been derived, and every one of them exists because something before it failed in a way we measured -- the fixed input width of a feedforward network, the geometric decay of a recurrent gradient, the fixed width of a context vector, the sequential cost of recurrence.
+
+  # the next article starts here and asks a different question. Not how this object was arrived at, but what it *is*: a function from a token sequence to a distribution over the next token, with no memory, no state, and no ability to act -- and what it costs to run one at scale.
+
+s07 claims 10/10 passed in 0.00s
+==============================================================================
+

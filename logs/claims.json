@@ -1,0 +1,1158 @@
+{
+  "environment": {
+    "python": "3.13.5",
+    "numpy": "2.3.5",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "machine": "AMD64"
+  },
+  "produced": {
+    "s08": {
+      "at": "2026-08-09T18:08:04Z",
+      "environment": {
+        "python": "3.13.5",
+        "numpy": "2.3.5",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64"
+      }
+    },
+    "s09": {
+      "at": "2026-08-09T18:08:04Z",
+      "environment": {
+        "python": "3.13.5",
+        "numpy": "2.3.5",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64"
+      }
+    },
+    "s10": {
+      "at": "2026-08-09T18:08:04Z",
+      "environment": {
+        "python": "3.13.5",
+        "numpy": "2.3.5",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64"
+      }
+    },
+    "s11": {
+      "at": "2026-08-09T18:08:04Z",
+      "environment": {
+        "python": "3.13.5",
+        "numpy": "2.3.5",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64"
+      }
+    },
+    "s12": {
+      "at": "2026-08-09T18:08:04Z",
+      "environment": {
+        "python": "3.13.5",
+        "numpy": "2.3.5",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64"
+      }
+    },
+    "s01": {
+      "at": "2026-08-16T16:38:05Z",
+      "environment": {
+        "python": "3.13.5",
+        "numpy": "2.3.5",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64"
+      }
+    },
+    "s02": {
+      "at": "2026-08-16T16:38:05Z",
+      "environment": {
+        "python": "3.13.5",
+        "numpy": "2.3.5",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64"
+      }
+    },
+    "s03": {
+      "at": "2026-08-16T16:38:05Z",
+      "environment": {
+        "python": "3.13.5",
+        "numpy": "2.3.5",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64"
+      }
+    },
+    "s04": {
+      "at": "2026-08-16T16:38:05Z",
+      "environment": {
+        "python": "3.13.5",
+        "numpy": "2.3.5",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64"
+      }
+    },
+    "s05": {
+      "at": "2026-08-16T16:38:05Z",
+      "environment": {
+        "python": "3.13.5",
+        "numpy": "2.3.5",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64"
+      }
+    },
+    "s06": {
+      "at": "2026-08-16T16:38:05Z",
+      "environment": {
+        "python": "3.13.5",
+        "numpy": "2.3.5",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64"
+      }
+    },
+    "s07": {
+      "at": "2026-08-16T16:38:05Z",
+      "environment": {
+        "python": "3.13.5",
+        "numpy": "2.3.5",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64"
+      }
+    },
+    "s13": {
+      "at": "2026-08-09T18:08:04Z",
+      "environment": {
+        "python": "3.13.5",
+        "numpy": "2.3.5",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64"
+      }
+    }
+  },
+  "sections": [
+    "s01",
+    "s02",
+    "s03",
+    "s04",
+    "s05",
+    "s06",
+    "s07",
+    "s08",
+    "s09",
+    "s10",
+    "s11",
+    "s12",
+    "s13"
+  ],
+  "ran_this_time": [
+    "s01",
+    "s02",
+    "s03",
+    "s04",
+    "s05",
+    "s06",
+    "s07"
+  ],
+  "total": 167,
+  "passed": 167,
+  "failed": [],
+  "claims": [
+    {
+      "section": "s01",
+      "claim": "the backward pass derived in the previous article is correct",
+      "ok": true,
+      "detail": "analytic gradients agree with central finite differences to 5.4e-10 relative L2 error over all 172 weights, across 5 examples"
+    },
+    {
+      "section": "s01",
+      "claim": "the analytic softmax Jacobian matches finite differences",
+      "ok": true,
+      "detail": "max abs difference 2.72e-11"
+    },
+    {
+      "section": "s01",
+      "claim": "every row of the Jacobian sums to zero",
+      "ok": true,
+      "detail": "raising one logit must lower the other probabilities, because the outputs are constrained to sum to one"
+    },
+    {
+      "section": "s01",
+      "claim": "dL/dz = p - y, confirmed against finite differences",
+      "ok": true,
+      "detail": "max abs difference 5.35e-11"
+    },
+    {
+      "section": "s01",
+      "claim": "the gradient sums to zero, so the update cannot shift all logits together",
+      "ok": true,
+      "detail": "sum(p) = sum(y) = 1, so sum(p - y) = 0; softmax is invariant to a constant added to every logit and the gradient reflects that"
+    },
+    {
+      "section": "s01",
+      "claim": "a two-class softmax equals the sigmoid of the logit difference",
+      "ok": true,
+      "detail": "p_1 = 0.119202922022118 against sigma(z_1 - z_0) = 0.119202922022118"
+    },
+    {
+      "section": "s01",
+      "claim": "categorical cross-entropy at K=2 equals binary cross-entropy",
+      "ok": true,
+      "detail": "identical at y=0 and y=1, to 0.0e+00"
+    },
+    {
+      "section": "s01",
+      "claim": "and the categorical gradient reduces exactly to the published article's output term",
+      "ok": true,
+      "detail": "(p - y)_1 == a^L - y to 0.0e+00 at both labels"
+    },
+    {
+      "section": "s01",
+      "claim": "cross-entropy against a one-hot target is the negative log-probability of the observed token",
+      "ok": true,
+      "detail": "difference 0.00e+00 nats"
+    },
+    {
+      "section": "s01",
+      "claim": "minimising mean cross-entropy is maximising corpus log-likelihood",
+      "ok": true,
+      "detail": "corpus NLL 1246.085719 = T x mean CE = 1246.085719"
+    },
+    {
+      "section": "s01",
+      "claim": "perplexity is the exponentiated cross-entropy, in either base",
+      "ok": true,
+      "detail": "2^5.9924 = e^4.1536 = 63.664"
+    },
+    {
+      "section": "s01",
+      "claim": "the uniform model has perplexity exactly |V|",
+      "ok": true,
+      "detail": "2^log2(40) = 40.000"
+    },
+    {
+      "section": "s01",
+      "claim": "perplexity has no upper bound: a miscalibrated model scores worse than uniform",
+      "ok": true,
+      "detail": "random logits give 63.7 against the uniform 40, because confidently assigning low probability to what actually happened is penalised without limit"
+    },
+    {
+      "section": "s01",
+      "claim": "the output layer's share of parameters shrinks as the model grows",
+      "ok": true,
+      "detail": "31.2% at d=768 falling to 0.6% at d=8192, because the body grows as d^2 and the head only as d"
+    },
+    {
+      "section": "s01",
+      "claim": "a window shorter than the dependency fails structurally, and 16x the data does not help",
+      "ok": true,
+      "detail": "D_KL for n < 4 is 1.622-1.638 bits at 15k tokens and 1.626-1.629 bits at 240k -- unchanged, because the information is absent from the input rather than merely under-sampled"
+    },
+    {
+      "section": "s01",
+      "claim": "the divergence collapses exactly at the dependency length",
+      "ok": true,
+      "detail": "minimum D_KL at n = 4, which is the lag; 0.0194 bits against 1.6261 at n = 3"
+    },
+    {
+      "section": "s01",
+      "claim": "widening the window past the dependency makes the model worse, not merely more expensive",
+      "ok": true,
+      "detail": "n=4: 0.0194 bits, n=5: 0.0653, n=6: 0.1402 -- each extra token multiplies the context count by |V|=6 while the data per context divides by it"
+    },
+    {
+      "section": "s01",
+      "claim": "a recurrent state cannot losslessly carry more than 32d/log2|V| tokens",
+      "ok": true,
+      "detail": "d=512 bounds lossless recall at about 1,049 tokens; d=4096 at about 8,393"
+    },
+    {
+      "section": "s01",
+      "claim": "attention pays for losslessness in memory that grows with the sequence",
+      "ok": true,
+      "detail": "no compression bound applies, because no compression happens; the cost moves from an information limit to a memory limit"
+    },
+    {
+      "section": "s01",
+      "claim": "the output of the generalised network is a distribution over the vocabulary",
+      "ok": true,
+      "detail": "|sum - 1| = 0.00e+00 over |V|=40"
+    },
+    {
+      "section": "s02",
+      "claim": "per-position weights make the model's size depend on the longest sequence it may ever see",
+      "ok": true,
+      "detail": "60,000 parameters at T=1,000 against 60 shared, and a sequence one token longer than anything seen in training has no weights at all"
+    },
+    {
+      "section": "s02",
+      "claim": "the same parameters process any sequence length",
+      "ok": true,
+      "detail": "84 parameters handled lengths 3, 10, 50, 200 unchanged"
+    },
+    {
+      "section": "s02",
+      "claim": "the derived backward pass through time is correct",
+      "ok": true,
+      "detail": "analytic gradient agrees with central finite differences to 4.8e-10 over all 36 recurrent weights, on a 12-step sequence"
+    },
+    {
+      "section": "s02",
+      "claim": "the accumulated gradient equals the sum of its per-step contributions",
+      "ok": true,
+      "detail": "sum over k of delta_k s_{k-1}^T reproduces dJ/dW exactly, which is the slide's sum made literal"
+    },
+    {
+      "section": "s02",
+      "claim": "the gradient is dominated by the steps nearest the loss",
+      "ok": true,
+      "detail": "the last three steps contribute 72.0% of the total magnitude; the first three contribute 1.43%"
+    },
+    {
+      "section": "s02",
+      "claim": "recurrence forces a number of sequential steps equal to the sequence length",
+      "ok": true,
+      "detail": "s_t depends on s_{t-1} by construction, so no amount of hardware shortens the chain"
+    },
+    {
+      "section": "s03",
+      "claim": "the share of entries below 1 barely moves with width while sigma_max grows without bound",
+      "ok": true,
+      "detail": "about 68% of entries are below 1 at every width, yet sigma_max goes 4.67 -> 31.24 from d=4 to d=256"
+    },
+    {
+      "section": "s03",
+      "claim": "for standard normal entries sigma_max grows as about 2*sqrt(d)",
+      "ok": true,
+      "detail": "d=16: 7.17 against 2*sqrt(d) = 8.0; d=64: 15.53 against 2*sqrt(d) = 16.0; d=256: 31.24 against 2*sqrt(d) = 32.0"
+    },
+    {
+      "section": "s03",
+      "claim": "even the modern 1/sqrt(d) scaling leaves sigma_max near 2, not below 1",
+      "ok": true,
+      "detail": "sigma_max is 1.79, 1.94, 1.95 -- every entry is below 1 and the matrix still amplifies"
+    },
+    {
+      "section": "s03",
+      "claim": "in the contracting regime the decay is a straight line in log space, which is precisely what 'geometric' means",
+      "ok": true,
+      "detail": "R^2 is 0.9996, 0.9991, 0.9936 for sigma_max up to 2"
+    },
+    {
+      "section": "s03",
+      "claim": "but the geometric description breaks down as the crossover is approached",
+      "ok": true,
+      "detail": "R^2 falls from 0.9996 at sigma_max = 0.5 to 0.2899 at 5.0, because near the crossover the per-step factor stops being constant: units saturate by different amounts at different points in the sequence, so no single ratio describes the whole journey"
+    },
+    {
+      "section": "s03",
+      "claim": "with a saturating activation the ratio stays below 1 far past sigma_max = 1",
+      "ok": true,
+      "detail": "sigma_max = 1 gives a ratio of 0.351 and sigma_max = 3.0 still only 0.726; the crossover is near sigma_max = 5.0, not 1"
+    },
+    {
+      "section": "s03",
+      "claim": "tanh is self-limiting: raising sigma_max lowers the activation derivative",
+      "ok": true,
+      "detail": "mean tanh' falls 0.626 > 0.605 > 0.532 > 0.432 > 0.353 > 0.315 as sigma_max rises, because larger pre-activations saturate more units"
+    },
+    {
+      "section": "s03",
+      "claim": "the measured decay is strictly faster than the sigma_max bound",
+      "ok": true,
+      "detail": "measured/bound is 0.354, 0.353, 0.351 -- the bound assumes tanh' = 1 everywhere, which happens only at exactly zero input"
+    },
+    {
+      "section": "s03",
+      "claim": "even setting sigma_max to exactly 1 does not stop the decay",
+      "ok": true,
+      "detail": "at sigma_max = 1 the measured ratio is still 0.351, because the saturating activation contributes a factor below 1 at every step"
+    },
+    {
+      "section": "s03",
+      "claim": "the effective memory horizon is a handful of steps unless the ratio is pushed against 1",
+      "ok": true,
+      "detail": "8 steps at sigma=0.5, rising to 13 at sigma=0.99"
+    },
+    {
+      "section": "s03",
+      "claim": "clipping bounds an exploding gradient",
+      "ok": true,
+      "detail": "1.205e+02 clipped to 1.000e+00"
+    },
+    {
+      "section": "s03",
+      "claim": "clipping does nothing whatever to a vanishing one",
+      "ok": true,
+      "detail": "1.274e-24 passes through unchanged -- clipping is a ceiling, and the problem here is a floor"
+    },
+    {
+      "section": "s03",
+      "claim": "the forward pass still carries early information, while the backward pass no longer carries the gradient for it",
+      "ok": true,
+      "detail": "changing how the first input enters moves the loss by 0.6438, so the dependency is expressible; but the gradient arriving there is 2.8e-36 of its starting magnitude, so training cannot exploit it"
+    },
+    {
+      "section": "s03",
+      "claim": "a non-saturating activation reaches explosion where a saturating one is still contracting",
+      "ok": true,
+      "detail": "at sigma_max = 3.0 ReLU gives 6.55e+02 while tanh gives 2.83e-05 -- 2.3e+07x apart, because tanh's derivative falls as its input grows and ReLU's does not"
+    },
+    {
+      "section": "s03",
+      "claim": "the distribution of gradient magnitudes is heavy-tailed across inputs",
+      "ok": true,
+      "detail": "over 400 input sequences at sigma_max = 2.5 the mean is 5.8x the median and the worst sequence is 291x it -- a mean well above the median is the signature of a tail"
+    },
+    {
+      "section": "s04",
+      "claim": "every gate is a vector of values in (0, 1), decided per unit and per step",
+      "ok": true,
+      "detail": "the gates are outputs of a sigmoid reading h_{t-1} and x_t, so the network learns what to carry rather than being told"
+    },
+    {
+      "section": "s04",
+      "claim": "the cell-state Jacobian is exactly the diagonal matrix of forget gates",
+      "ok": true,
+      "detail": "finite differences agree with diag(f_t) to 4.6e-11, and the off-diagonal entries are zero -- units do not mix along this path"
+    },
+    {
+      "section": "s04",
+      "claim": "the gated path decays enormously more slowly than the matrix path",
+      "ok": true,
+      "detail": "at distance 40 the vanilla gradient is 1.0e-19 of its starting size and the LSTM cell path is 2.2e-06"
+    },
+    {
+      "section": "s04",
+      "claim": "the GRU's update gate does the same job as the LSTM's forget gate",
+      "ok": true,
+      "detail": "GRU carry path at distance 40 is 3.7e-06, the same mechanism with one fewer gate and no separate cell state"
+    },
+    {
+      "section": "s04",
+      "claim": "like for like, the LSTM's complete backward pass retains vastly more gradient than the vanilla network's",
+      "ok": true,
+      "detail": "at distance 40: LSTM 1.78e-04 against the RNN's 9.97e-20, both measured as complete backward passes"
+    },
+    {
+      "section": "s04",
+      "claim": "the two routes add rather than one attenuating the other",
+      "ok": true,
+      "detail": "the full pass (1.78e-04) exceeds the cell path alone (2.20e-06); gradient arriving by the matrix route is added to what the highway carries, not subtracted from it. The two are not directly comparable in any case -- the highway figure is a pure Jacobian product, the full figure a gradient with a source term -- and the honest comparison is the one above, against the ungated network"
+    },
+    {
+      "section": "s04",
+      "claim": "a fixed-width state cannot losslessly retain an arbitrarily long past, however good its gates",
+      "ok": true,
+      "detail": "distinguishing all |V|^T prefixes needs T log2|V| bits; d floats hold at most 32d, so d=512 bounds lossless recall near 1,049 tokens regardless of architecture"
+    },
+    {
+      "section": "s05",
+      "claim": "the ceiling on what a fixed-width state can carry is linear in its width and independent of training",
+      "ok": true,
+      "detail": "a counting argument, so no encoder beats it: information that was never distinguishable cannot be recovered"
+    },
+    {
+      "section": "s05",
+      "claim": "recall from a fixed-width context degrades as the source lengthens",
+      "ok": true,
+      "detail": "accuracy falls from 0.796 at L=4 to 0.180 at L=64, at a constant state width of 32"
+    },
+    {
+      "section": "s05",
+      "claim": "the failure is the width of the channel, not the length as such",
+      "ok": true,
+      "detail": "at L=32, widening the state from 16 to 128 raises accuracy from 0.182 to 0.437 -- the same sequence, a bigger pipe"
+    },
+    {
+      "section": "s05",
+      "claim": "accuracy rises with state width, as the bound predicts it must",
+      "ok": true,
+      "detail": "0.170 at d=8 rising to 0.546 at d=128"
+    },
+    {
+      "section": "s05",
+      "claim": "an encoder with a perfect gradient path still has a fixed-width context vector",
+      "ok": true,
+      "detail": "gating changed how the gradient travels between steps; it did not change how much a state can hold, and 5.2's bound never mentions gradients"
+    },
+    {
+      "section": "s05",
+      "claim": "the information the bottleneck destroys was computed and then discarded",
+      "ok": true,
+      "detail": "the encoder produces L states and the context vector keeps one; nothing needs to be recomputed to do better"
+    },
+    {
+      "section": "s06",
+      "claim": "attention removes the length dependence that the bottleneck created",
+      "ok": true,
+      "detail": "at L=64 recall goes from 0.180 to 0.986, at the same state width"
+    },
+    {
+      "section": "s06",
+      "claim": "the advantage grows with source length",
+      "ok": true,
+      "detail": "1.3x at L=4 against 5.5x at L=64 -- short sentences never needed it"
+    },
+    {
+      "section": "s06",
+      "claim": "attention converts a fixed channel into one that scales with the input",
+      "ok": true,
+      "detail": "S5's bound was d*32 >= L*log2(V) and constrained L; with L states kept, the storage grows with L and the constraint disappears"
+    },
+    {
+      "section": "s06",
+      "claim": "the attention weights concentrate on the source position actually being used",
+      "ok": true,
+      "detail": "the peak weight lands on the queried position 100.0% of the time at L=8"
+    },
+    {
+      "section": "s06",
+      "claim": "the weights carry real information, sitting well below uniform entropy",
+      "ok": true,
+      "detail": "L=8: 0.56 bits against 3.00 uniform; L=16: 0.03 bits against 4.00 uniform; L=32: 0.23 bits against 5.00 uniform; L=64: 0.28 bits against 6.00 uniform"
+    },
+    {
+      "section": "s06",
+      "claim": "attention left the sequential cost of the encoder untouched",
+      "ok": true,
+      "detail": "attention changed what the decoder may read; it did not change how the encoder states are produced, and they are still produced one after another"
+    },
+    {
+      "section": "s07",
+      "claim": "every position produces a distribution over every position",
+      "ok": true,
+      "detail": "all 8 rows are probability distributions over all 8 positions"
+    },
+    {
+      "section": "s07",
+      "claim": "self-attention makes the distance between any two positions constant",
+      "ok": true,
+      "detail": "position 1 and position 10,000 are one operation apart, against 9,999 for a recurrent network -- and S3 showed what happens to a gradient crossing 9,999 multiplications"
+    },
+    {
+      "section": "s07",
+      "claim": "and removes the sequential dependency entirely",
+      "ok": true,
+      "detail": "all positions are computed at once, so wall-clock training time stops scaling with sequence length and starts scaling with available hardware"
+    },
+    {
+      "section": "s07",
+      "claim": "self-attention is permutation-equivariant: shuffling the input shuffles the output and changes nothing else",
+      "ok": true,
+      "detail": "agreement to 2.2e-16 -- the mechanism has no way to tell 'dog bites man' from 'man bites dog'"
+    },
+    {
+      "section": "s07",
+      "claim": "adding positional encodings breaks the permutation symmetry",
+      "ok": true,
+      "detail": "the same shuffle now changes the output by 9.10e-01, against 2.2e-16 without positions"
+    },
+    {
+      "section": "s07",
+      "claim": "the encoding gives distinct positions distinct representations",
+      "ok": true,
+      "detail": "no two positions share an encoding, so the model can distinguish them even though the mechanism reading them is order-blind"
+    },
+    {
+      "section": "s07",
+      "claim": "heads attend differently, so several relations can be represented at once",
+      "ok": true,
+      "detail": "mean entropy ranges 1.443 to 1.798 bits across 4 heads on identical input -- each is a different view"
+    },
+    {
+      "section": "s07",
+      "claim": "splitting the width keeps the parameter count unchanged",
+      "ok": true,
+      "detail": "4 heads x 8 dimensions = 32, so multi-head is a reorganisation of the same budget rather than an addition"
+    },
+    {
+      "section": "s07",
+      "claim": "with a causal mask each position attends to itself and its past, and nothing else",
+      "ok": true,
+      "detail": "position i attends to exactly i+1 positions and places exactly zero weight on every later one"
+    },
+    {
+      "section": "s07",
+      "claim": "the rows are still probability distributions after masking",
+      "ok": true,
+      "detail": "the softmax renormalises over what remains, so masking redistributes attention rather than discarding it"
+    },
+    {
+      "section": "s08",
+      "claim": "the type inventory is still growing when the corpus runs out",
+      "ok": true,
+      "detail": "103 word types appear for the first time in the final tenth of the corpus"
+    },
+    {
+      "section": "s08",
+      "claim": "a capped word vocabulary leaves part of held-out text unrepresentable",
+      "ok": true,
+      "detail": "5.27% of held-out words, spanning 223 distinct types, all arriving as the same symbol"
+    },
+    {
+      "section": "s08",
+      "claim": "a character vocabulary has no out-of-vocabulary rate at all",
+      "ok": true,
+      "detail": "34 distinct held-out characters, all present in the 34-symbol training set"
+    },
+    {
+      "section": "s08",
+      "claim": "no merge produces a string the vocabulary already has, so the vocabulary size is exactly the base plus the merge count",
+      "ok": true,
+      "detail": "35 characters + 350 merges = 385 distinct entries"
+    },
+    {
+      "section": "s08",
+      "claim": "each merge removes exactly as many tokens as the pair had occurrences",
+      "ok": true,
+      "detail": "predicted and recounted corpus totals agree at all 350 merges, worst disagreement 0 tokens"
+    },
+    {
+      "section": "s08",
+      "claim": "encoding and decoding held-out text is an exact round trip",
+      "ok": true,
+      "detail": "4304 words, 25127 characters, compared as strings rather than approximately"
+    },
+    {
+      "section": "s08",
+      "claim": "more merges never lengthen the encoding",
+      "ok": true,
+      "detail": "5.838 >= 3.114 >= 2.365 >= 1.799 >= 1.460 >= 1.299"
+    },
+    {
+      "section": "s08",
+      "claim": "the return on each additional merge falls as the vocabulary grows",
+      "ok": true,
+      "detail": "tokens saved per word per merge: 1.09e-01 > 3.00e-02 > 1.13e-02 > 3.39e-03 > 1.07e-03"
+    },
+    {
+      "section": "s08",
+      "claim": "moving to characters multiplies the quadratic term of attention by the square of the length ratio",
+      "ok": true,
+      "detail": "a character sequence is 4.49x longer, so the T^2 term is 20.2x larger for identical content"
+    },
+    {
+      "section": "s08",
+      "claim": "there is no fixed conversion between words and tokens",
+      "ok": true,
+      "detail": "tokens per word ranges from 1.00 to 1.92 across 304 sentences of the same corpus"
+    },
+    {
+      "section": "s08",
+      "claim": "the two texts are the same content in different characters",
+      "ok": true,
+      "detail": "7605 characters each, one the image of the other under a one-to-one character map"
+    },
+    {
+      "section": "s08",
+      "claim": "identical content costs more tokens in the script the tokenizer saw less of",
+      "ok": true,
+      "detail": "3094 tokens against 2015 for the same 7605 characters, a factor of 1.54"
+    },
+    {
+      "section": "s08",
+      "claim": "balancing the training mix removes the penalty",
+      "ok": true,
+      "detail": "B / A falls from 1.535 to 0.997 when the two scripts get equal shares of the same total corpus"
+    },
+    {
+      "section": "s08",
+      "claim": "most held-out word occurrences reach the model as a single token",
+      "ok": true,
+      "detail": "83.3% of 4304 occurrences, whose characters are therefore not separately addressable"
+    },
+    {
+      "section": "s08",
+      "claim": "token count carries no information about character count",
+      "ok": true,
+      "detail": "single-token words in this vocabulary run from 1 to 8 characters"
+    },
+    {
+      "section": "s08",
+      "claim": "consecutive numbers do not share a segmentation",
+      "ok": true,
+      "detail": "the 900 three-digit numbers take 10 at 2 tokens, 790 at 3 tokens, 100 at 4 tokens, so digit position is not a fixed feature of the input"
+    },
+    {
+      "section": "s08",
+      "claim": "a capitalised word and its lower-case form need not share a single token",
+      "ok": true,
+      "detail": "20 of the 20 most frequent words have no token in common with their capitalised form"
+    },
+    {
+      "section": "s09",
+      "claim": "cross-entropy equals entropy plus divergence, to machine precision",
+      "ok": true,
+      "detail": "residual 1.643e-14 bits/token"
+    },
+    {
+      "section": "s09",
+      "claim": "the irreducible term dominates the model's total loss",
+      "ok": true,
+      "detail": "H(p*)=1.612 vs D_KL=0.171 bits/token"
+    },
+    {
+      "section": "s09",
+      "claim": "divergence from the true process decreases monotonically with data",
+      "ok": true,
+      "detail": "3.2468 > 1.0804 > 0.3052 > 0.1707"
+    },
+    {
+      "section": "s09",
+      "claim": "the output is a normalised distribution over the whole vocabulary",
+      "ok": true,
+      "detail": "|sum - 1| = 2.22e-16, min p = 7.823e-04"
+    },
+    {
+      "section": "s09",
+      "claim": "identical context gives bit-identical output",
+      "ok": true,
+      "detail": "np.array_equal on float64, not allclose"
+    },
+    {
+      "section": "s09",
+      "claim": "intervening calls on other contexts leave the output unchanged",
+      "ok": true,
+      "detail": "52 calls between the two evaluations, max abs diff 0.0e+00"
+    },
+    {
+      "section": "s09",
+      "claim": "different contexts give different outputs",
+      "ok": true,
+      "detail": "D_KL = 5.701 bits"
+    },
+    {
+      "section": "s09",
+      "claim": "truncating below the true order of the process destroys information",
+      "ok": true,
+      "detail": "keep 0: 2.291, keep 1: 2.158, keep 2: 0.0e+00 bits"
+    },
+    {
+      "section": "s10",
+      "claim": "how much the model is actually choosing between varies by more than a bit across its own contexts",
+      "ok": true,
+      "detail": "entropy runs from 0.948 to 4.386 bits, a spread of 3.438 bits and so more than a doubling of the effective number of options"
+    },
+    {
+      "section": "s10",
+      "claim": "temperature preserves the entire ranking of the vocabulary, not merely the top token",
+      "ok": true,
+      "detail": "the full argsort of all 24 tokens is identical at every temperature in (0.25, 0.5, 1.0, 2.0, 8.0), at all 576 contexts"
+    },
+    {
+      "section": "s10",
+      "claim": "entropy rises and the top token's share falls monotonically with temperature, at every context",
+      "ok": true,
+      "detail": "checked pairwise across 5 temperatures at 576 contexts"
+    },
+    {
+      "section": "s10",
+      "claim": "high temperature approaches the uniform distribution",
+      "ok": true,
+      "detail": "worst divergence from uniform at T=64 is 0.0006 bits, over all 576 contexts"
+    },
+    {
+      "section": "s10",
+      "claim": "a fixed k keeps very different amounts of the distribution depending on the context",
+      "ok": true,
+      "detail": "at k=3 the retained mass runs from 0.236 to 0.925, a spread of 0.689"
+    },
+    {
+      "section": "s10",
+      "claim": "top-k deletes outcomes the process genuinely produces",
+      "ok": true,
+      "detail": "on average 11.9% of the true next-token mass falls outside the model's top 3, rising to 100.0% at the worst context"
+    },
+    {
+      "section": "s10",
+      "claim": "the nucleus grows with the mass threshold at every context",
+      "ok": true,
+      "detail": "checked at all 576 contexts across five thresholds, not on the averages"
+    },
+    {
+      "section": "s10",
+      "claim": "the nucleus size tracks the model's uncertainty rather than being set by hand",
+      "ok": true,
+      "detail": "mean entropy rises with every nucleus size holding at least ten contexts: 1.629 < 2.112 < 2.444 < 2.605"
+    },
+    {
+      "section": "s10",
+      "claim": "temperature before truncation and truncation before temperature are different decoders",
+      "ok": true,
+      "detail": "at 100.0% of contexts the surviving token set differs, so 'temperature 1.5, top-p 0.9' does not specify a decoder without saying which happens first"
+    },
+    {
+      "section": "s10",
+      "claim": "no setting of either dial can change what greedy decoding returns",
+      "ok": true,
+      "detail": "the argmax is unchanged at all 576 contexts under temperature 1.5, top-k 3 and top-p 0.5"
+    },
+    {
+      "section": "s10",
+      "claim": "the dynamic program agrees with exhaustive search over 13,824 sequences",
+      "ok": true,
+      "detail": "DP -2.7151667084 vs brute force -2.7151667084 bits (the reads with)"
+    },
+    {
+      "section": "s10",
+      "claim": "greedy decoding is suboptimal at some start contexts",
+      "ok": true,
+      "detail": "at T=3 greedy loses at 34.4% of the 576 contexts; at T=12, 90.3%"
+    },
+    {
+      "section": "s10",
+      "claim": "the greedy shortfall grows with the horizon",
+      "ok": true,
+      "detail": "mean regret 0.0664 bits at T=2 rising to 1.9501 bits at T=12"
+    },
+    {
+      "section": "s10",
+      "claim": "widening the beam never increases regret and eventually removes it",
+      "ok": true,
+      "detail": "regret 3.1964 bits at width 1 falling to 0.0e+00 at width 32"
+    },
+    {
+      "section": "s10",
+      "claim": "value iteration settles on a single policy rather than oscillating",
+      "ok": true,
+      "detail": "the argmax policy over all 576 states was unchanged for the final 496 sweeps"
+    },
+    {
+      "section": "s10",
+      "claim": "the most probable continuation collapses onto a small recurring set of states",
+      "ok": true,
+      "detail": "1 of 576 contexts lie on any cycle of the optimal policy, and the longest cycle is 1 states"
+    },
+    {
+      "section": "s10",
+      "claim": "sampling covers several times more of the state space than the optimum does",
+      "ok": true,
+      "detail": "37.2 distinct bigrams against 7.1, over 40 tokens from each of the 576 start contexts"
+    },
+    {
+      "section": "s10",
+      "claim": "the likelihood-maximising path repeats itself and the sampled one does not",
+      "ok": true,
+      "detail": "repeated-bigram rate 0.817 against 0.046"
+    },
+    {
+      "section": "s10",
+      "claim": "the decoders order exactly by how much searching they do",
+      "ok": true,
+      "detail": "-0.9545 > -1.1330 > -1.7497 > -2.2665"
+    },
+    {
+      "section": "s10",
+      "claim": "the decoder with the higher likelihood produces the less faithful text",
+      "ok": true,
+      "detail": "0.358 bits against 0.001 bits of divergence from the true unigram distribution of the process"
+    },
+    {
+      "section": "s10",
+      "claim": "verified speculative decoding emits exactly the target distribution, at every context",
+      "ok": true,
+      "detail": "largest absolute deviation 3.331e-16 over all 13824 probabilities, computed algebraically rather than sampled"
+    },
+    {
+      "section": "s10",
+      "claim": "the acceptance rate is one minus the total variation distance between draft and target",
+      "ok": true,
+      "detail": "agreement to 2.78e-16 at all 576 contexts"
+    },
+    {
+      "section": "s10",
+      "claim": "a decoder whose acceptance rate varies beats one with the same average rate everywhere",
+      "ok": true,
+      "detail": "tokens per verification is a sum of powers of the acceptance rate and so convex in it, which is Jensen's inequality rather than a measurement artifact: k=2: 1.3963 > 1.3936, k=4: 1.4366 > 1.4296, k=8: 1.4424 > 1.4331"
+    },
+    {
+      "section": "s10",
+      "claim": "lengthening the draft has sharply diminishing returns",
+      "ok": true,
+      "detail": "the second drafted token adds 0.0941 tokens per verification; each of the fifth through eighth adds 0.0015, against a ceiling of 1.433 that no draft length passes"
+    },
+    {
+      "section": "s11",
+      "claim": "cached incremental decoding equals full recomputation",
+      "ok": true,
+      "detail": "max abs difference 1.998e-15 across 384 logits, i.e. accumulated floating-point round-off and nothing else"
+    },
+    {
+      "section": "s11",
+      "claim": "the resulting next-token distributions are identical to 1e-15",
+      "ok": true,
+      "detail": "D_KL = -1.840e-16 bits"
+    },
+    {
+      "section": "s11",
+      "claim": "the closed-form MAC counts match the instrumented implementation",
+      "ok": true,
+      "detail": "prefill 4423680 vs formula 4423680; step 110848 vs formula 110848"
+    },
+    {
+      "section": "s11",
+      "claim": "the cache removes exactly one factor of T, in either regime",
+      "ok": true,
+      "detail": "gap 0.957 at small T and 1.042 at large T"
+    },
+    {
+      "section": "s11",
+      "claim": "attention only dominates prefill past T ~ 2d + d_ff",
+      "ok": true,
+      "detail": "share is 7.7% at T=32, 50% at T=384, 95.5% at T=8192"
+    },
+    {
+      "section": "s11",
+      "claim": "grouped-query attention cuts KV memory by exactly H/H_kv",
+      "ok": true,
+      "detail": "512 KiB/token to 128 KiB/token, a factor of 4"
+    },
+    {
+      "section": "s11",
+      "claim": "at serving batch sizes the KV cache overtakes the weights well inside advertised context lengths",
+      "ok": true,
+      "detail": "8B GQA in fp16: weights 15.0 GiB, KV equals that at 3,829 tokens when B=32"
+    },
+    {
+      "section": "s11",
+      "claim": "a volatile token at position 1 makes the entire prompt uncacheable",
+      "ok": true,
+      "detail": "reusable prefix 0 of 75 tokens, against 64 once the stamp moves behind the static block"
+    },
+    {
+      "section": "s11",
+      "claim": "the reusable prefix stops at the first differing token, wherever that is",
+      "ok": true,
+      "detail": "both layouts reuse exactly the 64 static tokens: the differing user turn ends reuse, so moving the stamp after it changes nothing"
+    },
+    {
+      "section": "s11",
+      "claim": "an append-only transcript keeps almost the whole prompt cacheable at every step",
+      "ok": true,
+      "detail": "lowest reuse across five steps is 84%"
+    },
+    {
+      "section": "s11",
+      "claim": "compacting history discards the cache from the first edited token on",
+      "ok": true,
+      "detail": "reuse drops from 100 tokens to 64 at the compaction step, and has to be rebuilt from there"
+    },
+    {
+      "section": "s11",
+      "claim": "the exact cache is bit-identical while every compressed variant changes the output",
+      "ok": true,
+      "detail": "exact D_KL = 0.0, int8 = 9.00e-06 bits, w=8 = 2.91e-01 bits"
+    },
+    {
+      "section": "s11",
+      "claim": "divergence grows as the window shrinks",
+      "ok": true,
+      "detail": "w=32 6.35e-02 < w=16 2.01e-01 < w=8 2.91e-01 bits"
+    },
+    {
+      "section": "s11",
+      "claim": "the raw dot-product variance tracks d_head and the scaled variance does not",
+      "ok": true,
+      "detail": "var(q.k)/d_head within 15% of 1 at every width; scaled variance within 15% of 1"
+    },
+    {
+      "section": "s11",
+      "claim": "without scaling, attention entropy falls monotonically as d_head grows",
+      "ok": true,
+      "detail": "2.96 > 1.33 > 0.58 > 0.28 bits"
+    },
+    {
+      "section": "s11",
+      "claim": "with scaling, attention entropy is invariant to d_head",
+      "ok": true,
+      "detail": "spread of 0.014 bits across a 64x range of widths, all near 5.32"
+    },
+    {
+      "section": "s12",
+      "claim": "datacentre accelerators demand over a hundred operations per byte to reach peak",
+      "ok": true,
+      "detail": "153 and 295 FLOP/byte against 23 for the laptop part"
+    },
+    {
+      "section": "s12",
+      "claim": "single-stream decode reaches under one percent of a device's arithmetic peak",
+      "ok": true,
+      "detail": "intensity 0.98 FLOP/byte against a balance of 153, giving 0.64% of peak"
+    },
+    {
+      "section": "s12",
+      "claim": "prefill is compute-bound at any realistic prompt length",
+      "ok": true,
+      "detail": "intensity 1161 FLOP/byte at T=1,024, above the 153 ridge point"
+    },
+    {
+      "section": "s12",
+      "claim": "the decode intensity ceiling equals T*/T at fp16",
+      "ok": true,
+      "detail": "ceiling matches the crossover ratio at every context length tested"
+    },
+    {
+      "section": "s12",
+      "claim": "beyond a context of a few thousand tokens, no batch size makes decode compute-bound",
+      "ok": true,
+      "detail": "at T=128 the ridge needs a batch of 183; at T=2,048 and beyond it cannot be reached at any batch size, because KV traffic alone exceeds the byte budget"
+    },
+    {
+      "section": "s12",
+      "claim": "the context length at which KV traffic doubles decode latency is exactly S11's memory crossover",
+      "ok": true,
+      "detail": "T* = 122,528 tokens, the same number at which the cache equals the weights in size -- one crossover, showing up once as a memory limit and once as a latency limit"
+    },
+    {
+      "section": "s12",
+      "claim": "hit rate and false-hit rate move together, so no threshold gives both",
+      "ok": true,
+      "detail": "tau=0.50 hits 98% with 57% of all queries answered wrongly; tau=0.85 hits 80% with 0.0% wrong"
+    },
+    {
+      "section": "s12",
+      "claim": "the optimal similarity threshold is set by the cost of being wrong, not by the embedding model",
+      "ok": true,
+      "detail": "optimal tau moves from 0.5 when a wrong answer is free, to 0.85 when it costs 200x an inference"
+    },
+    {
+      "section": "s12",
+      "claim": "the derived staleness probability matches simulation",
+      "ok": true,
+      "detail": "worst difference 0.00099 over 200,000 draws per row"
+    },
+    {
+      "section": "s12",
+      "claim": "in the slow-write limit staleness is approximately rT/2",
+      "ok": true,
+      "detail": "rT = 0.0300 gives P = 0.01485 against rT/2 = 0.01500"
+    },
+    {
+      "section": "s12",
+      "claim": "once rT exceeds about 3, shortening the TTL stops helping much",
+      "ok": true,
+      "detail": "rT = 3.0 already gives P(stale) = 0.683; the entry is more likely wrong than right"
+    },
+    {
+      "section": "s12",
+      "claim": "the closed form agrees with simulation while the queue is not saturated",
+      "ok": true,
+      "detail": "every percentile within 12% of simulation at utilisation <= 0.70, over 120,000 requests per row"
+    },
+    {
+      "section": "s12",
+      "claim": "the sampled p95 gets less reliable as utilisation rises, at fixed sample size",
+      "ok": true,
+      "detail": "1.3% error at utilisation <= 0.70 against 14.2% at 0.95, from the same 120,000 requests -- sojourn times are strongly correlated near saturation, so the effective sample size is far below the nominal one"
+    },
+    {
+      "section": "s12",
+      "claim": "latency is hyperbolic in load, not linear",
+      "ok": true,
+      "detail": "raising utilisation from 0.5 to 0.9 -- less than double the load -- multiplies p50 by 5.0x"
+    },
+    {
+      "section": "s12",
+      "claim": "the p95/p50 ratio is constant, so a healthy ratio proves nothing",
+      "ok": true,
+      "detail": "ratio is 4.32 at every utilisation, because the sojourn distribution is exponential at all loads -- only its scale moves"
+    },
+    {
+      "section": "s12",
+      "claim": "a multi-step task's median exceeds the number of steps times the request median",
+      "ok": true,
+      "detail": "14158 ms against 10397 ms, because the sum of exponentials has its mass shifted right of the sum of medians"
+    },
+    {
+      "section": "s12",
+      "claim": "but the task p95 is far below the number of steps times the request p95",
+      "ok": true,
+      "detail": "26400 ms against 44936 ms: independent steps average out, so the tails do not simply add"
+    },
+    {
+      "section": "s12",
+      "claim": "dividing by the success rate compresses the price spread but does not reverse it",
+      "ok": true,
+      "detail": "a 20x spread in price per token becomes 6.7x per completed task -- so per-token pricing overstates the real difference, while still ranking the cheap model first"
+    },
+    {
+      "section": "s12",
+      "claim": "with a realistic cost of failure the ranking inverts completely",
+      "ok": true,
+      "detail": "at $2.00 per escalation the 20x-priced model is cheapest overall ($0.129/task) and the cheapest-per-token model is dearest ($0.901/task), a 7.0x difference the token bill reverses"
+    },
+    {
+      "section": "s12",
+      "claim": "and once failure has any material cost, the token bill is a rounding error",
+      "ok": true,
+      "detail": "tokens are under 10% of total cost for every configuration once escalation is priced; the largest share is 7.2%"
+    },
+    {
+      "section": "s13",
+      "claim": "with a single-element action space and N=1 the loop is exactly one model call",
+      "ok": true,
+      "detail": "one trajectory, zero tool calls, zero trajectory entropy"
+    },
+    {
+      "section": "s13",
+      "claim": "constraining the action space strictly reduces trajectory entropy",
+      "ok": true,
+      "detail": "4.076 bits at |A|=6 against 1.609 bits at |A|=3, same skill"
+    },
+    {
+      "section": "s13",
+      "claim": "a near-deterministic policy has almost no autonomy by this measure",
+      "ok": true,
+      "detail": "H = 0.00e+00 bits for the forced script"
+    },
+    {
+      "section": "s13",
+      "claim": "raising temperature increases autonomy and reduces success together",
+      "ok": true,
+      "detail": "H 10.125 -> 10.462 bits while P(success) 0.4663 -> 0.2961"
+    },
+    {
+      "section": "s13",
+      "claim": "a policy reluctant to stop spends the entire step budget",
+      "ok": true,
+      "detail": "stop_bias -3.0: 70% of trajectories reach the ceiling, E[tau] = 7.27 of 8"
+    },
+    {
+      "section": "s13",
+      "claim": "eagerness to stop and competence trade off against each other",
+      "ok": true,
+      "detail": "stop_bias 2.0 terminates in 2.18 steps but succeeds 25.00% against 90.47% at stop_bias -1.0"
+    },
+    {
+      "section": "s13",
+      "claim": "suppressing repeats of uninformative actions cuts steps and wasted calls",
+      "ok": true,
+      "detail": "E[tau] 4.570 -> 3.634, wasted calls 0.880 -> 0.563"
+    },
+    {
+      "section": "s13",
+      "claim": "it costs some success, because terminating early forfeits recovery",
+      "ok": true,
+      "detail": "P(success) 0.9860 -> 0.9211"
+    },
+    {
+      "section": "s13",
+      "claim": "total loop cost grows faster than the number of steps",
+      "ok": true,
+      "detail": "32 steps cost 289.3x a single call, i.e. 9.04x more than 32 identical calls"
+    },
+    {
+      "section": "s13",
+      "claim": "and each individual call grows faster than the transcript does",
+      "ok": true,
+      "detail": "prompt grows 12.6x (1200 -> 15150 tokens) while the call costs 19.0x, because at 15k tokens the quadratic attention term is no longer negligible against 2d + d_ff = 24576"
+    },
+    {
+      "section": "s13",
+      "claim": "the sampled estimate agrees with the exact value inside sampling error",
+      "ok": true,
+      "detail": "|difference| 0.00027 against 2 s.e. = 0.00313"
+    },
+    {
+      "section": "s13",
+      "claim": "the enumeration accounts for essentially all probability mass",
+      "ok": true,
+      "detail": "residual 3.20e-13"
+    }
+  ]
+}

@@ -1,0 +1,104 @@
+==============================================================================
+s09  The baseline: an LLM as a function
+      f: V* -> Delta(V), and the three consequences that follow
+==============================================================================
+
+2.1  The object under study
+------------------------------------------------------------------------------
+  vocabulary size |V|                24
+  true source order                  2
+  support per context                5 of 24 tokens
+  train / dev / test tokens          48000 / 6000 / 6000
+
+  sample:  agent call no the token reads one stops emits . token no model step a state with one with call no the
+  # a known order-2 source, so the true distribution is available for comparison; a real LLM never offers this
+
+2.2  Fitting the interpolated trigram
+------------------------------------------------------------------------------
+  eq:  p_hat(w|u,v) = l3*c(u,v,w)/c(u,v) + l2*c(v,w)/c(v) + l1*c(w)/N
+       interpolation keeps the support full; an unsmoothed trigram assigns zero to unseen triples and held-out cross-entropy diverges
+  l1 (uni)  l2 (bi)  l3 (tri)  dev bits/token  dev PP
+  --------  -------  --------  --------------  ------
+      0.02      0.1      0.88          1.7674   3.404
+      0.05      0.1      0.85          1.8041   3.492
+       0.1      0.1       0.8          1.8697   3.655
+      0.02      0.2      0.78          1.8904   3.707
+       ...      ...       ...             ...     ...
+       0.2      0.4       0.4          2.5505   5.858
+  selected lambdas                   (0.02, 0.1, 0.88)
+  # selected on dev, never on train: fitted on the training counts the search drives l3 -> 1, because the unsmoothed model is by construction the best explanation of what it memorised
+  train cross-entropy                1.7206 bits/token
+  test  cross-entropy                1.7849 bits/token
+  test perplexity                    3.446 effective branches
+
+2.3  Where the loss actually goes
+------------------------------------------------------------------------------
+  eq:  H(p*, q) = H(p*) + D_KL(p* || q)
+       cross-entropy splits into the entropy of the process, which no model can remove, and the divergence of the model from it, which is the only part training can touch
+  H(p*)   irreducible entropy        1.6119 bits/token
+  D_KL(p* || p_hat)  model gap       0.1712 bits/token
+  H(p*) + D_KL                       1.7832 bits/token
+  H(p*, p_hat)  computed directly    1.7832 bits/token
+  [PASS] cross-entropy equals entropy plus divergence, to machine precision
+         residual 1.643e-14 bits/token
+  [PASS] the irreducible term dominates the model's total loss
+         H(p*)=1.612 vs D_KL=0.171 bits/token
+  # a perplexity number alone cannot tell you whether a model is weak or the process is noisy; only the split can, and the split needs a ground truth that production systems do not have
+
+2.4  The divergence shrinks with data, the entropy does not
+------------------------------------------------------------------------------
+  train tokens  D_KL(p*||p_hat)  test bits/token  test PP
+  ------------  ---------------  ---------------  -------
+           750           3.2468           4.8359   28.559
+          3000           1.0804           2.7655      6.8
+         12000           0.3052           1.9305    3.812
+         48000           0.1707           1.7886    3.455
+  [PASS] divergence from the true process decreases monotonically with data
+         3.2468 > 1.0804 > 0.3052 > 0.1707
+
+2.5  One forward pass, in full
+------------------------------------------------------------------------------
+  context = ('the', 'model')
+  token    p_hat   p_true  logit = log p_hat  -log2 p (bits)
+  -----  -------  -------  -----------------  --------------
+  and     0.4944   0.3344            -0.7044           1.016
+  model  0.30232  0.39665            -1.1963           1.726
+  grows  0.10421  0.25523            -2.2613           3.262
+  step   0.01586        0            -4.1436           5.978
+  stops  0.01346        0            -4.3083           6.216
+  agent   0.0085  0.00528            -4.7682           6.879
+  sum of all 24 probabilities        1
+  H(p_hat) at this context           2.0846 bits
+  [PASS] the output is a normalised distribution over the whole vocabulary
+         |sum - 1| = 2.22e-16, min p = 7.823e-04
+  # this vector is the model's entire output; a token is what a separate decoding rule does to it
+
+2.6  The function is pure, therefore the model is stateless
+------------------------------------------------------------------------------
+  [PASS] identical context gives bit-identical output
+         np.array_equal on float64, not allclose
+  [PASS] intervening calls on other contexts leave the output unchanged
+         52 calls between the two evaluations, max abs diff 0.0e+00
+  [PASS] different contexts give different outputs
+         D_KL = 5.701 bits
+
+  # this is the single most consequential fact in the repo. The model has no memory, no session and no accumulating state. A conversation is a string that a program rebuilds and resubmits on every turn. Memory, tools, planning and orchestration are therefore not model features; they are things written around a stateless function, and S13 onwards is about what it takes to write them.
+
+2.7  What 'context' means mechanically
+------------------------------------------------------------------------------
+  Truncate the conditioning set to the last n tokens and measure how far
+  the prediction moves from the full-context prediction.
+  tokens kept  mean D_KL vs full (bits)  max D_KL
+  -----------  ------------------------  --------
+            0                    2.2906    3.5725
+            1                    2.1581    5.2218
+            2                         0         0
+  [PASS] truncating below the true order of the process destroys information
+         keep 0: 2.291, keep 1: 2.158, keep 2: 0.0e+00 bits
+  # the context window is a hard horizon, not a soft preference. Beyond the dependency length of the process it costs nothing to drop tokens; below it, information is gone and no decoding rule recovers it. Real text has dependencies thousands of tokens long, which is the entire argument for long windows -- and the reason S11's KV cache matters, since that horizon has to be paid for in memory.
+
+  # where we are: the function is fixed, exact, stateless, and outputs a distribution rather than a token. Nothing above chose a token. Every system built on a model has to, and S10 is about the fact that the rule for doing it is a search with no tractable optimum
+
+s09 claims 8/8 passed in 4.63s
+==============================================================================
+

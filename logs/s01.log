@@ -1,0 +1,187 @@
+==============================================================================
+s01  From a neural network to a language model
+      three changes, of which only the third is hard
+==============================================================================
+
+0.1  Where the previous article ended, verified
+------------------------------------------------------------------------------
+  eq:  a^l = tanh(W^l a^{l-1} + b^l),   a^L = sigma(W^L a^{L-1} + b^L)
+       forward pass, in the notation of the published article
+  eq:  L = -( y log a^L + (1-y) log(1 - a^L) )
+       binary cross-entropy
+  eq:  d^L = a^L - y;   d^l = (W^{l+1})^T d^{l+1} * (1 - (a^l)^2)
+       the backward recurrence; tanh'(z) = 1 - tanh^2(z) = 1 - (a^l)^2
+  layer sizes                        4 -> 8 -> 8 -> 6 -> 4 -> 1
+  parameters                         199
+  examples                           120
+  relative L2 error, 5 examples      5.357e-10
+  worst single-element relative error 3.223e-05
+  smallest analytic gradient component 6.74e-05
+  [PASS] the backward pass derived in the previous article is correct
+         analytic gradients agree with central finite differences to 5.4e-10 relative L2 error over all 172 weights, across 5 examples
+  # the worst single element disagrees by 3e-05, and that is the finite difference being wrong rather than the gradient: the smallest component here is 7e-05, and differencing a float64 loss cannot resolve a quantity that size. Gradient checks are done on the vector norm for exactly this reason
+  # this is the starting point restated as something checked rather than recalled. Everything below changes three things about it and nothing else
+
+0.2  Change one: the output layer becomes a softmax
+------------------------------------------------------------------------------
+  eq:  p_k = exp(z_k) / sum_j exp(z_j)
+       K outputs that sum to one
+  eq:  dp_i/dz_j = p_i (delta_ij - p_j)
+       a full K x K Jacobian, not the diagonal one a sigmoid gives
+  quantity        value
+  --------------  ---------------------------------------------
+  logits z        [-1.2317, 0.2671, -0.0069, 0.5015, -1.3267]
+  p = softmax(z)  [0.06474, 0.28977, 0.22031, 0.36632, 0.05886]
+  sum p           1
+  row sums of J   [-0.0, 0.0, 0.0, -0.0, -0.0]
+  [PASS] the analytic softmax Jacobian matches finite differences
+         max abs difference 2.72e-11
+  [PASS] every row of the Jacobian sums to zero
+         raising one logit must lower the other probabilities, because the outputs are constrained to sum to one
+  # the zero row sum is the whole character of a softmax. Outputs are not independent units that happen to be normalised afterwards; they compete. It is also, mechanically, why S10.2 finds that temperature reweights the distribution without ever reordering it
+
+0.3  Change two: the loss becomes categorical, and the gradient survives
+------------------------------------------------------------------------------
+  eq:  L = -sum_k y_k log p_k
+       categorical cross-entropy
+  eq:  dL/dz = p - y
+       the p_i in the Jacobian cancels the 1/p_i from the loss, exactly as the sigmoid derivative cancelled in the binary case
+  k      p_k  y_k  analytic p-y  finite difference
+  -  -------  ---  ------------  -----------------
+  0  0.06474    0      0.064735           0.064735
+  1  0.28977    0       0.28977            0.28977
+  2  0.22031    1     -0.779688          -0.779688
+  3  0.36632    0      0.366319           0.366319
+  4  0.05886    0      0.058865           0.058865
+  [PASS] dL/dz = p - y, confirmed against finite differences
+         max abs difference 5.35e-11
+  [PASS] the gradient sums to zero, so the update cannot shift all logits together
+         sum(p) = sum(y) = 1, so sum(p - y) = 0; softmax is invariant to a constant added to every logit and the gradient reflects that
+  # this is the payoff of the section. The backward recurrence from 0.1 is untouched: the only thing that changed is the vector handed to it at the output layer, and it has the same form as before. Nothing about backpropagation needs relearning to go from a classifier to a language model
+
+0.4  The two are the same object: K = 2 reduces to the published case
+------------------------------------------------------------------------------
+  eq:  softmax([z_0, z_1])_1 = sigma(z_1 - z_0)
+       a two-class softmax is a logistic function of the logit difference
+  y  categorical CE  binary CE  (p-y) at k=1  a^L - y from 0.1
+  -  --------------  ---------  ------------  ----------------
+  0        0.126928   0.126928      0.119203          0.119203
+  1         2.12693    2.12693     -0.880797         -0.880797
+  [PASS] a two-class softmax equals the sigmoid of the logit difference
+         p_1 = 0.119202922022118 against sigma(z_1 - z_0) = 0.119202922022118
+  [PASS] categorical cross-entropy at K=2 equals binary cross-entropy
+         identical at y=0 and y=1, to 0.0e+00
+  [PASS] and the categorical gradient reduces exactly to the published article's output term
+         (p - y)_1 == a^L - y to 0.0e+00 at both labels
+  # so this is not a new derivation replacing an old one. The binary network of the previous article is the K=2 instance of the same equations, and the generalisation is genuinely free: set K to whatever the label space needs and change nothing else.
+
+0.5  Change three, part one: the label becomes the next token
+------------------------------------------------------------------------------
+  eq:  L_t = -log p(x_t | x_<t)
+       cross-entropy against a one-hot target keeps exactly one term
+  eq:  sum_t L_t = -log prod_t p(x_t|x_<t) = -log p(x_1..x_T)
+       so minimising mean cross-entropy IS maximising corpus likelihood, by the chain rule of S9
+  mean CE via full one-hot sum       4.15362 nats/token
+  mean CE via -log p(observed)       4.15362 nats/token
+  corpus negative log-likelihood     1246.09 nats
+  T x mean CE                        1246.09 nats
+  [PASS] cross-entropy against a one-hot target is the negative log-probability of the observed token
+         difference 0.00e+00 nats
+  [PASS] minimising mean cross-entropy is maximising corpus log-likelihood
+         corpus NLL 1246.085719 = T x mean CE = 1246.085719
+  model                    bits/token  perplexity
+  -----------------------  ----------  ----------
+  uniform over |V|             5.3219          40
+  untrained random logits      5.9924      63.664
+  [PASS] perplexity is the exponentiated cross-entropy, in either base
+         2^5.9924 = e^4.1536 = 63.664
+  [PASS] the uniform model has perplexity exactly |V|
+         2^log2(40) = 40.000
+  [PASS] perplexity has no upper bound: a miscalibrated model scores worse than uniform
+         random logits give 63.7 against the uniform 40, because confidently assigning low probability to what actually happened is penalised without limit
+  # |V| is the baseline, not the ceiling. Being wrong cheaply -- staying near uniform -- costs log2|V| bits; being wrong confidently costs arbitrarily more, since the loss is -log p and p can approach zero. That asymmetry is worth carrying forward: it is the same reason S9's KL floors q away from zero, and the reason a confident hallucination is a worse failure than an admitted uncertainty by more than it looks
+  # the previous article closed on accuracy, precision and recall, which need a decision threshold. A language model is scored before any threshold: perplexity is the loss itself, exponentiated, and reads as an effective branching factor. It is the same cross-entropy, in different clothes
+
+0.6  What |V| outputs cost
+------------------------------------------------------------------------------
+  eq:  unembedding parameters = d * |V|;  body ~ 12 L d^2
+       4d^2 of attention projections plus 8d^2 of a 4x feed-forward, per layer
+  configuration        body params  unembedding params  unembedding share
+  -------------------  -----------  ------------------  -----------------
+  small, d=768 L=12            85M                 39M              31.2%
+  medium, d=1600 L=48       1,475M                 80M               5.2%
+  large, d=4096 L=32        6,442M                206M               3.1%
+  large, d=8192 L=80       64,425M                412M               0.6%
+  [PASS] the output layer's share of parameters shrinks as the model grows
+         31.2% at d=768 falling to 0.6% at d=8192, because the body grows as d^2 and the head only as d
+  # worth knowing before reading a parameter count. At small scale a third of the weights can sit in a layer that only converts a d-vector into vocabulary scores, which is why tied embeddings and vocabulary size are live design questions for small models and rounding errors for large ones
+
+0.7  Change three, part two: a fixed weight matrix cannot read a sequence
+------------------------------------------------------------------------------
+  W^1 in 0.1 has shape (8, 4) because the input always has exactly 4
+  features. A sequence has no fixed width, so something has to give.
+  Three answers, and each pays for it somewhere different.
+
+  (a) Fixed window. Condition on the last n tokens and truncate the rest.
+      This is an n-gram or a fixed-context MLP -- and it is exactly the
+      trigram S9 uses, so the reader has already met one.
+  window n  covers lag 4  contexts |V|^n  obs/context at 240k  D_KL at 15k tokens  D_KL at 240k tokens
+  --------  ------------  --------------  -------------------  ------------------  -------------------
+         0  no                         1              240,000              1.6268               1.6269
+         1  no                         6               40,000              1.6291               1.6267
+         2  no                        36                6,667              1.6219               1.6287
+         3  no                       216                1,111               1.638               1.6261
+         4  yes                    1,296                  185              0.1305               0.0194
+         5  yes                    7,776                   31              0.3448               0.0653
+         6  yes                   46,656                    5              0.5287               0.1402
+  [PASS] a window shorter than the dependency fails structurally, and 16x the data does not help
+         D_KL for n < 4 is 1.622-1.638 bits at 15k tokens and 1.626-1.629 bits at 240k -- unchanged, because the information is absent from the input rather than merely under-sampled
+  [PASS] the divergence collapses exactly at the dependency length
+         minimum D_KL at n = 4, which is the lag; 0.0194 bits against 1.6261 at n = 3
+  [PASS] widening the window past the dependency makes the model worse, not merely more expensive
+         n=4: 0.0194 bits, n=5: 0.0653, n=6: 0.1402 -- each extra token multiplies the context count by |V|=6 while the data per context divides by it
+  # two different failures, and conflating them is why 'just use a bigger window' sounds reasonable. Below the dependency length the failure is structural: the information is not in the input and no quantity of data recovers it, which is S9.7's point arriving as an architectural constraint. Above it the failure is statistical: a fixed-window model estimates a free parameter set per context configuration, so cost and variance both grow as |V|^n. That is the real indictment of the fixed-window answer -- not that the window is too small, but that widening it is self-defeating. Attention escapes this because it does not hold a parameter per configuration; it computes a weighting over positions from shared projections, and pays in memory instead.
+
+  (b) Recurrence. Carry a fixed-size state forward: h_t = f(h_{t-1}, x_t).
+      Memory is O(1) in sequence length, which is the attraction. The cost
+      is a hard information bound.
+  eq:  to distinguish all |V|^T prefixes needs T log2|V| bits; a state of d float32 holds at most 32d
+       so lossless recall is impossible beyond T* = 32d / log2|V|
+  state width d  state bits (fp32)  bits per token  T* lossless bound
+  -------------  -----------------  --------------  -----------------
+            256              8,192           15.62                525
+            512             16,384           15.62              1,049
+           1024             32,768           15.62              2,098
+           4096            131,072           15.62              8,393
+  [PASS] a recurrent state cannot losslessly carry more than 32d/log2|V| tokens
+         d=512 bounds lossless recall at about 1,049 tokens; d=4096 at about 8,393
+  # an upper bound by counting, so it holds regardless of architecture or training. Beyond T* a recurrent model is necessarily compressing, and what it discards is chosen by the weights rather than by the reader. That is the honest description of a recurrent model's memory: lossy by construction, at a rate set by its width
+
+  (c) Attention. Keep every position and let each query read all of them.
+      Nothing is compressed, so nothing is structurally lost -- and the bill
+      arrives as memory that grows with the sequence.
+  eq:  kv_bytes = 2 * L * H_kv * d_head * T * bytes
+       linear in T, which is precisely the cost S11 takes apart
+  context T  information content of the prefix  KV cache, 8B GQA fp16
+  ---------  ---------------------------------  ---------------------
+      1,024                            2.0 KiB                128 MiB
+      8,192                           15.6 KiB              1,024 MiB
+     32,768                           62.5 KiB              4,096 MiB
+  [PASS] attention pays for losslessness in memory that grows with the sequence
+         no compression bound applies, because no compression happens; the cost moves from an information limit to a memory limit
+
+  # that is the trade, stated plainly. Recurrence is O(1) memory and lossy above T*. Attention is O(T) memory and lossless. Transformers won because the second bill is one you can pay with hardware and the first is one you cannot pay at all -- and every consequence in S11, from grouped-query attention to paged allocation to what a context window costs, is the industry working down that memory bill.
+
+0.8  Where this leaves us
+------------------------------------------------------------------------------
+  Training is over and theta is frozen. What remains at inference is a
+  function from a token sequence to a distribution over the next token:
+  eq:  f_theta : V^* -> Delta(V)
+       the object S9 takes apart
+  [PASS] the output of the generalised network is a distribution over the vocabulary
+         |sum - 1| = 0.00e+00 over |V|=40
+  # everything after this point is a property of that function and of the code placed around it. S9 establishes what the function is and what it cannot do; S11 prices the context it consumes; S12 prices serving it. The agent stack, which is the subject of the next article, is what gets built on top
+
+s01 claims 20/20 passed in 17.69s
+==============================================================================
+

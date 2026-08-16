@@ -1,0 +1,155 @@
+==============================================================================
+s11  Context, attention and the KV cache
+      one algebraic identity, and everything it pays for
+==============================================================================
+
+2.1  The object under study
+------------------------------------------------------------------------------
+  layers                             2
+  d_model                            64
+  heads x d_head                     4 x 16
+  vocabulary                         32
+  dtype                              float64
+  # untrained random weights. Nothing below depends on the weights meaning anything: the claims are about the algebra of causal attention and the arithmetic of its memory, which a toy and a frontier model share exactly
+
+2.2  Why the cache is exact, not approximate
+------------------------------------------------------------------------------
+  eq:  A_i = sum_{j<=i} softmax_j( q_i . k_j / sqrt(d_h) ) v_j
+       position i attends only to positions j <= i, so K_j and V_j for j <= i cannot depend on anything appended after position i
+
+  Test: score a 40-token prefix, then extend by 12 tokens two ways.
+    (a) recompute the full 52-token sequence from scratch
+    (b) run 12 cached single-token steps from the prefix cache
+  max |logit difference| over 12 x 32 logits 1.998e-15
+  float64 epsilon                    2.220e-16
+  [PASS] cached incremental decoding equals full recomputation
+         max abs difference 1.998e-15 across 384 logits, i.e. accumulated floating-point round-off and nothing else
+  [PASS] the resulting next-token distributions are identical to 1e-15
+         D_KL = -1.840e-16 bits
+  # so a KV cache costs nothing in quality, ever. If a system's outputs change when caching is switched on, the cache is not the explanation -- a bug, a batching-dependent kernel or a changed prefix is. This is worth being firm about, because it is the one cache in the stack that is free, and 2.6 covers the variants that are not.
+
+2.3  What the cache removes: exactly one factor of T
+------------------------------------------------------------------------------
+  eq:  prefill:      4 T d^2 + 2 T^2 d + 2 T d d_ff
+       projections are linear in T and quadratic in d; attention is the reverse, so which term dominates depends on T against d
+  eq:  cached step:  Theta(T d)   attention + Theta(d^2)   projections
+       one query row against T cached keys
+  eq:  uncached step: Theta(T^2 d) -- the whole prefix again, every token
+       so generating T tokens without a cache is Theta(T^3 d) in total
+  [PASS] the closed-form MAC counts match the instrumented implementation
+         prefill 4423680 vs formula 4423680; step 110848 vs formula 110848
+  tokens generated  MACs with cache  MACs without  speedup  attention % of prefill
+  ----------------  ---------------  ------------  -------  ----------------------
+                32        4.231e+06     8.511e+07     20.1                     7.7
+               128        1.604e+07     1.149e+09     71.6                      25
+               384        5.906e+07     1.289e+10    218.2                      50
+              1024        2.400e+08     1.474e+11    614.2                    72.7
+              4096        2.568e+09     6.746e+12   2626.7                    91.4
+              8192        9.431e+09     5.043e+13   5347.8                    95.5
+  regime                          cached exponent  uncached exponent    gap
+  ------------------------------  ---------------  -----------------  -----
+  T < d_model (projection-bound)            1.057              2.014  0.957
+  T >> d_model (attention-bound)            1.757              2.799  1.042
+  [PASS] the cache removes exactly one factor of T, in either regime
+         gap 0.957 at small T and 1.042 at large T
+  [PASS] attention only dominates prefill past T ~ 2d + d_ff
+         share is 7.7% at T=32, 50% at T=384, 95.5% at T=8192
+  # worth being precise about, because 'attention is quadratic' is usually quoted as though it were the dominant cost at every length. It is not. Prefill is 4Td^2 + 2T^2 d + 2Td*d_ff, so the quadratic term only takes over past T ~ 2d + d_ff -- 384 tokens for this toy, roughly 24k tokens for a d_model 4096 model with a 4x feed-forward. Below that, prompt cost is linear in length and set by model width. What is true at every length is the exponent gap: the cache removes one factor of T, which is why time-to-first-token and inter-token latency are quoted separately and respond to different fixes.
+  wall clock, 64 tokens cached       42 ms
+  wall clock, 64 tokens uncached     372 ms
+  wall-clock ratio                   8.87 x
+  # indicative only, and deliberately not a claim. Timing small NumPy calls on a memory-constrained machine measures the machine's mood; the MAC counts above are the reproducible statement of the same fact
+
+2.4  What the cache costs in memory, and when it beats the weights
+------------------------------------------------------------------------------
+  eq:  kv_bytes = 2 * L * H_kv * d_head * T * B * bytes_per_element
+       the leading 2 is one K and one V; note it is linear in context and in batch, while the weights are constant in both
+  configuration                  KV per token  T* at B=1  T* at B=32  KV at T=32k, B=32
+  -----------------------------  ------------  ---------  ----------  -----------------
+  8B, multi-head (H_kv = H)      512 KiB       30,632     957         512 GiB
+  8B, grouped-query (H_kv = 8)   128 KiB       122,528    3,829       128 GiB
+  8B, multi-query (H_kv = 1)     16 KiB        980,225    30,632      16 GiB
+  70B, grouped-query (H_kv = 8)  320 KiB       430,908    13,466      320 GiB
+  # T* is the context length at which the cache is as large as the weights, in fp16 for both
+  [PASS] grouped-query attention cuts KV memory by exactly H/H_kv
+         512 KiB/token to 128 KiB/token, a factor of 4
+  [PASS] at serving batch sizes the KV cache overtakes the weights well inside advertised context lengths
+         8B GQA in fp16: weights 15.0 GiB, KV equals that at 3,829 tokens when B=32
+  # this single table explains most of the serving stack. GQA and MQA exist to shrink H_kv. Paged attention exists because that memory is allocated per sequence and fragments. Context-length pricing exists because context is the term that scales with both T and B while the weights do not. And for an agent the relevant number is not the window but the transcript: every step appends, so T only ever grows.
+
+2.5  Prompt caching is prefix reuse, and one volatile token destroys it
+------------------------------------------------------------------------------
+  eq:  reusable(a, b) = max{ n : a_1..a_n == b_1..b_n }
+       cached K,V for position i are valid for a new request only if every token up to i is unchanged, because attention at i reads all of them
+
+  (a) Two requests sharing a system prompt and tool schemas, differing in the
+      user turn. The only variable is where the volatile token sits.
+  prompt layout        tokens  reusable prefix  % cacheable
+  -------------------  ------  ---------------  -----------
+  stamp, static, user      75                0           0%
+  static, stamp, user      75               64          85%
+  static, user, stamp      75               64          85%
+  [PASS] a volatile token at position 1 makes the entire prompt uncacheable
+         reusable prefix 0 of 75 tokens, against 64 once the stamp moves behind the static block
+  [PASS] the reusable prefix stops at the first differing token, wherever that is
+         both layouts reuse exactly the 64 static tokens: the differing user turn ends reuse, so moving the stamp after it changes nothing
+  # only the first divergence matters, so 'volatile content last' is really 'volatile content after everything you want cached'. Putting a timestamp behind a user turn that already differs buys nothing
+
+  (b) The case that matters for agents: successive steps of one task, where
+      each step appends the last tool result to the transcript.
+  step  prompt tokens  reusable prefix  % cacheable   action
+  ----  -------------  ---------------  -----------  -------
+     1             86               72  84%           append
+     2            100               86  86%           append
+     3            114              100  88%           append
+     4            128              114  89%           append
+     5            142              128  90%           append
+  
+     1             86               72  84%           append
+     2            100               86  86%           append
+     3             82               64  78%          compact
+     4             96               82  85%           append
+     5            110               96  87%           append
+  [PASS] an append-only transcript keeps almost the whole prompt cacheable at every step
+         lowest reuse across five steps is 84%
+  [PASS] compacting history discards the cache from the first edited token on
+         reuse drops from 100 tokens to 64 at the compaction step, and has to be rebuilt from there
+  # this is the whole content of the advice to put static instructions first and volatile content last, and it is not a vendor quirk. The cache is keyed on an exact token prefix because that is what the causal mask makes it valid for. A timestamp, a request id or a reordered tool list at the top of a system prompt costs the full prefill on every call. For an agent the corollary is sharper: the transcript is append-only, so the prefix is stable by construction and reuse across steps of one task is nearly total -- unless the orchestrator rewrites or re-summarises history, which invalidates everything from the first edited token onward.
+
+2.6  Quantising or evicting from the cache is a different function
+------------------------------------------------------------------------------
+  cache variant            max |logit delta|  D_KL vs exact (bits)  argmax  KV bytes at T=41
+  -----------------------  -----------------  --------------------  ------  ----------------
+  exact                             0.00e+00                     0  same               1.00x
+  int8 per-head quantised           8.05e-03                 9e-06  same               0.25x
+  sliding window, w=32              6.87e-01               0.06346  same               0.78x
+  sliding window, w=16              1.44e+00              0.200689  same               0.39x
+  sliding window, w=8               1.54e+00              0.291247  same               0.20x
+  [PASS] the exact cache is bit-identical while every compressed variant changes the output
+         exact D_KL = 0.0, int8 = 9.00e-06 bits, w=8 = 2.91e-01 bits
+  [PASS] divergence grows as the window shrinks
+         w=32 6.35e-02 < w=16 2.01e-01 < w=8 2.91e-01 bits
+  # keep these in separate mental columns. The KV cache is an identity and costs nothing. int8 KV and windowed attention are lossy compressions that buy memory with accuracy, and the exchange rate is a function of the workload -- a window that is harmless for chat is not harmless for an agent whose decisive evidence is a tool result forty steps back. When a vendor says 'caching', find out which of these is meant.
+
+2.7  Attention entropy: what the scaling factor is for
+------------------------------------------------------------------------------
+  eq:  q.k has variance ~ d_head for unit-variance inputs, hence the 1/sqrt(d_head)
+       without it the softmax saturates as d_head grows and attention collapses onto a single position
+  d_head  var(q.k)  var(q.k/sqrt(d))  mean H unscaled bits  mean H scaled bits
+  ------  --------  ----------------  --------------------  ------------------
+       8         8             0.997                 2.957               5.325
+      32      32.1             1.004                 1.326               5.317
+     128     127.6             0.997                 0.579               5.314
+     512     515.6             1.007                 0.275               5.311
+  uniform attention over 64 keys would be 6 bits
+  [PASS] the raw dot-product variance tracks d_head and the scaled variance does not
+         var(q.k)/d_head within 15% of 1 at every width; scaled variance within 15% of 1
+  [PASS] without scaling, attention entropy falls monotonically as d_head grows
+         2.96 > 1.33 > 0.58 > 0.28 bits
+  [PASS] with scaling, attention entropy is invariant to d_head
+         spread of 0.014 bits across a 64x range of widths, all near 5.32
+  # a saturated softmax is a hard argmax with no gradient, which is a training failure rather than an inference one -- but it is the same saturation S10.2 showed at low temperature, and worth recognising as one phenomenon appearing twice
+
+s11 claims 16/16 passed in 1.05s
+==============================================================================
+

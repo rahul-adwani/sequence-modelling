@@ -1,0 +1,97 @@
+==============================================================================
+s05  Encoder-decoder, and the bottleneck
+      a forward problem, which gating does nothing for
+==============================================================================
+
+5.1  Two networks, and the vector between them
+------------------------------------------------------------------------------
+  eq:  encoder: s_1 .. s_L   ->   c = s_L   ->   decoder: y_1 .. y_M
+       the source is read into a state; the target is written out of it
+
+  This is the first architecture in the article that produces a
+  sequence rather than consuming one, and it is what made machine
+  translation a neural problem. The encoder and decoder are usually
+  LSTMs, so both inherit S4's gradient path.
+
+  Everything the decoder knows about the source arrives through c.
+  c has the same width whether the source was four words or forty.
+
+5.2  The bound, before any measurement
+------------------------------------------------------------------------------
+  eq:  d * 32 bits  >=  L * log2(V) bits
+       to distinguish every possible source of length L over a vocabulary of V, the state must have at least as many distinguishable configurations
+  state width d  state bits (fp32)  bits per symbol  symbols distinguishable at best
+  -------------  -----------------  ---------------  -------------------------------
+              8                256             3.58                               71
+             16                512             3.58                              143
+             32              1,024             3.58                              286
+             64              2,048             3.58                              571
+  [PASS] the ceiling on what a fixed-width state can carry is linear in its width and independent of training
+         a counting argument, so no encoder beats it: information that was never distinguishable cannot be recovered
+  # this is an upper bound and a generous one -- it assumes every bit of every float is used perfectly. Real encoders fall short of it by a wide margin, which is why 5.3 measures rather than stopping here
+
+5.3  What actually degrades
+------------------------------------------------------------------------------
+  Encode sequences of increasing length into a fixed-width vector, then
+  try to read individual positions back out. The reader is given every
+  advantage: it knows the encoder exactly and is told which position it
+  wants.
+  source length L  recovery rate  chance  usable?
+  ---------------  -------------  ------  -------
+                4         0.7958  0.0833  partial
+                8           0.55  0.0833  partial
+               16         0.3906  0.0833  partial
+               32         0.2573  0.0833  no
+               64         0.1799  0.0833  no
+  [PASS] recall from a fixed-width context degrades as the source lengthens
+         accuracy falls from 0.796 at L=4 to 0.180 at L=64, at a constant state width of 32
+  [PASS] the failure is the width of the channel, not the length as such
+         at L=32, widening the state from 16 to 128 raises accuracy from 0.182 to 0.437 -- the same sequence, a bigger pipe
+  state width d  recovery rate at L=24  counting bound (symbols)
+  -------------  ---------------------  ------------------------
+              8                 0.1701                        71
+             16                 0.2139                       143
+             32                 0.2674                       286
+             64                 0.4014                       571
+            128                 0.5465                     1,143
+  [PASS] accuracy rises with state width, as the bound predicts it must
+         0.170 at d=8 rising to 0.546 at d=128
+  # note how far the measured numbers sit below the counting bound. A 32-wide state could in principle distinguish hundreds of symbols and in practice recalls a fraction of twenty-four. The bound says what is impossible; it does not promise what is achievable
+
+5.4  This is not the problem gating solved
+------------------------------------------------------------------------------
+  Worth being explicit, because the two failures are routinely run
+  together and they have nothing in common.
+                               vanishing gradient (S3, S4)        the bottleneck (here)
+  ---------------------------  ---------------------------------  ----------------------------
+  direction                    backward                           forward
+  what fails                   the training signal cannot travel  the information cannot fit
+  fixed by                     an additive path through time      not fixed by anything so far
+  present in an LSTM encoder?  no -- gating repaired it           yes -- entirely unaffected
+  [PASS] an encoder with a perfect gradient path still has a fixed-width context vector
+         gating changed how the gradient travels between steps; it did not change how much a state can hold, and 5.2's bound never mentions gradients
+  # the practical signature reported at the time was exactly this: translation quality that held up on short sentences and fell away on long ones, with no corresponding training instability. A gradient problem does not look like that
+
+5.5  Where the fix has to come from
+------------------------------------------------------------------------------
+  There are only two ways to widen a channel that is too narrow: make
+  it wider, or stop forcing everything through it.
+
+  Making it wider fails on cost. The state's width is a fixed model
+  parameter that has to be paid for on every sequence, short ones
+  included, and 5.3 shows the returns are gradual while the cost is
+  immediate. Sizing the state for the longest sentence you might ever
+  see is the same mistake as sizing per-position weights for the
+  longest sequence, which S2 already rejected.
+
+  Which leaves the second option. The encoder already computed a state
+  at every source position -- s_1 through s_L -- and the architecture
+  throws all but the last one away. They are still there. The question
+  is what to do with them.
+  [PASS] the information the bottleneck destroys was computed and then discarded
+         the encoder produces L states and the context vector keeps one; nothing needs to be recomputed to do better
+  # that is the observation S6 is built on, and it is worth pausing on because it is the whole idea. Attention is not a new source of information. It is the decision to stop throwing away information the model already had.
+
+s05 claims 6/6 passed in 7.28s
+==============================================================================
+

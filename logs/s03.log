@@ -1,0 +1,181 @@
+==============================================================================
+s03  Why the gradient dies over distance
+      the product hiding inside backpropagation through time
+==============================================================================
+
+3.1  The factor that is really a product
+------------------------------------------------------------------------------
+  eq:  ds_t/ds_k = prod_{j=k+1..t} diag(1 - s_j^2) W
+       one factor per step of distance between the nudge and the loss
+  eq:  ||ds_t/ds_k||_2 <= (gamma * sigma_max(W))^(t-k)
+       a sufficient upper bound, from submultiplicativity of the 2-norm: gamma bounds |tanh'| and sigma_max(W) bounds ||W||_2. It bounds growth; it does not by itself determine it
+
+  Two words worth pinning down, because everything below turns on them.
+
+    singular value  -- how much a matrix can stretch a vector. The largest
+                       one, sigma_max, is the worst case: no vector is stretched
+                       by more than this factor.
+    spectral radius -- used loosely here for that same largest singular value,
+                       the quantity that decides whether repeated multiplication
+                       grows or shrinks a vector.
+
+  If sigma_max < 1, each step shrinks the gradient by a roughly constant
+  factor. Over d steps that is that factor to the power d. That is all
+  the vanishing gradient problem is.
+
+3.2  The usual explanation names the wrong quantity
+------------------------------------------------------------------------------
+  The standard telling goes: W is drawn from a normal distribution so its
+  entries are mostly below 1, tanh' is below 1, and we are therefore
+  multiplying a lot of small numbers together.
+
+  The conclusion is right and the criterion is not. What controls a repeated
+  matrix product is the largest singular value, and that is not the size of
+  a typical entry -- it is a property of the matrix as a whole.
+  width d  initialisation  mean |W_ij|  entries below 1  sigma_max(W)
+  -------  --------------  -----------  ---------------  ------------
+        4  N(0, 1)               0.979              69%          4.67
+        4  N(0, 1/d)              0.49              75%          2.33
+       16  N(0, 1)                0.79              70%          7.17
+       16  N(0, 1/d)             0.197             100%          1.79
+       64  N(0, 1)               0.803              68%         15.53
+       64  N(0, 1/d)               0.1             100%          1.94
+      256  N(0, 1)               0.797              68%         31.24
+      256  N(0, 1/d)              0.05             100%          1.95
+  [PASS] the share of entries below 1 barely moves with width while sigma_max grows without bound
+         about 68% of entries are below 1 at every width, yet sigma_max goes 4.67 -> 31.24 from d=4 to d=256
+  [PASS] for standard normal entries sigma_max grows as about 2*sqrt(d)
+         d=16: 7.17 against 2*sqrt(d) = 8.0; d=64: 15.53 against 2*sqrt(d) = 16.0; d=256: 31.24 against 2*sqrt(d) = 32.0
+  [PASS] even the modern 1/sqrt(d) scaling leaves sigma_max near 2, not below 1
+         sigma_max is 1.79, 1.94, 1.95 -- every entry is below 1 and the matrix still amplifies
+  # so the matrix factor typically *grows* the gradient rather than shrinking it, and the contraction in a vanilla RNN comes from the other term: tanh' is at most 1 and well below it once units saturate. That matters because it tells you what to fix and what not to. It is also why orthogonal initialisation, which sets every singular value to exactly 1, is the standard choice for recurrent weights -- it removes the matrix from the argument entirely and leaves the activation as the only remaining factor. The sections below therefore control sigma_max directly rather than trusting a distribution to supply it.
+
+3.3  Measuring the ratio
+------------------------------------------------------------------------------
+  Build the same network with W rescaled to different sigma_max, run a
+  60-step sequence, and watch the gradient shrink on its way back.
+  sigma_max(W)  fitted per-step ratio  mean tanh'  grad at d=10      d=25      d=50
+  ------------  ---------------------  ----------  ------------  --------  --------
+           0.5                  0.182       0.626      2.73e-08  2.86e-19  3.89e-38
+             1                 0.3511       0.605      1.70e-05  3.13e-12  1.05e-23
+             2                 0.5851       0.532      9.81e-03  2.03e-06  1.07e-11
+             3                 0.7258       0.432      3.43e-01  1.21e-03  5.46e-07
+             4                 0.8179       0.353      1.12e+00  1.34e-02  1.70e-03
+             5                 1.0281       0.315      4.10e-01  9.54e-01  1.43e+00
+  sigma_max(W)  R^2 of the log-linear fit
+  ------------  -------------------------
+           0.5                    0.99962
+             1                    0.99907
+             2                    0.99355
+             3                     0.9808
+             4                    0.92614
+             5                    0.28988
+  [PASS] in the contracting regime the decay is a straight line in log space, which is precisely what 'geometric' means
+         R^2 is 0.9996, 0.9991, 0.9936 for sigma_max up to 2
+  [PASS] but the geometric description breaks down as the crossover is approached
+         R^2 falls from 0.9996 at sigma_max = 0.5 to 0.2899 at 5.0, because near the crossover the per-step factor stops being constant: units saturate by different amounts at different points in the sequence, so no single ratio describes the whole journey
+  # that limitation is worth stating precisely, because it is where the geometric-series picture earns its keep and where it does not. In the regime that actually matters -- gradients contracting, which 3.3 shows is the default for a saturating network -- the decay is geometric to four decimal places, and the horizon calculation in 3.5 follows from it. Near the explosion crossover the picture is genuinely a worse model of what is happening.
+  [PASS] with a saturating activation the ratio stays below 1 far past sigma_max = 1
+         sigma_max = 1 gives a ratio of 0.351 and sigma_max = 3.0 still only 0.726; the crossover is near sigma_max = 5.0, not 1
+  [PASS] tanh is self-limiting: raising sigma_max lowers the activation derivative
+         mean tanh' falls 0.626 > 0.605 > 0.532 > 0.432 > 0.353 > 0.315 as sigma_max rises, because larger pre-activations saturate more units
+  # that last row is the interesting one, and it is not what the usual telling predicts. A saturating activation fights explosion: push sigma_max up and the pre-activations grow, which drives units into the flat regions of tanh, which drops tanh' and pulls the product back down. The two failures are therefore not mirror images around sigma_max = 1. Vanishing is the default and the crossover into genuine explosion sits far out. This is why exploding gradients are associated with unbounded activations and very large weights, while the saturating recurrent networks of the era mostly just went quiet.
+
+3.4  The activation makes it worse, never better
+------------------------------------------------------------------------------
+  eq:  tanh'(z) = 1 - tanh(z)^2 = 1 - s^2,   which is 1 only at s = 0
+       so the diag factor is at most 1 and is strictly less whenever a unit is doing anything
+  sigma_max(W)  measured ratio  measured / bound
+  ------------  --------------  ----------------
+           0.9          0.3187            0.3541
+          0.95          0.3351            0.3527
+             1          0.3511            0.3511
+  [PASS] the measured decay is strictly faster than the sigma_max bound
+         measured/bound is 0.354, 0.353, 0.351 -- the bound assumes tanh' = 1 everywhere, which happens only at exactly zero input
+  [PASS] even setting sigma_max to exactly 1 does not stop the decay
+         at sigma_max = 1 the measured ratio is still 0.351, because the saturating activation contributes a factor below 1 at every step
+  # this is why tuning the initialisation does not rescue a vanilla RNN. You can set sigma_max to 1 and the gradient still dies, because the activation supplies its own contraction. Pushing sigma_max above 1 to compensate buys explosion instead -- and the two failures are not symmetric, which 3.6 is about.
+
+3.5  How far back the network can actually learn
+------------------------------------------------------------------------------
+  eq:  d* = log(threshold) / log(ratio)
+       the distance at which the surviving gradient falls below a threshold -- here one millionth of where it started
+  sigma_max(W)  measured ratio  effective horizon (steps)
+  ------------  --------------  -------------------------
+           0.5           0.182                        8.1
+           0.7          0.2508                         10
+           0.9          0.3187                       12.1
+          0.95          0.3351                       12.6
+          0.99          0.3479                       13.1
+  [PASS] the effective memory horizon is a handful of steps unless the ratio is pushed against 1
+         8 steps at sigma=0.5, rising to 13 at sigma=0.99
+  # the horizon depends on the ratio only through a logarithm, so buying reach by nudging sigma_max towards 1 is a bad trade: it costs stability quickly and buys distance slowly. A network that needs to connect a pronoun to a name forty words earlier is being asked for a horizon these numbers do not offer.
+
+3.6  Clipping fixes one failure and cannot touch the other
+------------------------------------------------------------------------------
+  Gradient clipping rescales the gradient when its norm exceeds a ceiling.
+  It is the standard answer to exploding gradients, and it works. Ask what
+  it does to the other case.
+  regime     sigma_max  gradient at d=40  after clipping at 1.0  effect
+  ---------  ---------  ----------------  ---------------------  ---------
+  exploding          6         1.205e+02              1.000e+00  bounded
+  vanishing        0.7         1.274e-24              1.274e-24  unchanged
+  [PASS] clipping bounds an exploding gradient
+         1.205e+02 clipped to 1.000e+00
+  [PASS] clipping does nothing whatever to a vanishing one
+         1.274e-24 passes through unchanged -- clipping is a ceiling, and the problem here is a floor
+  # the asymmetry is the point. Explosion is a scale problem and a scale fix solves it. Vanishing is an information problem: by the time the gradient has been multiplied down to 1e-13 the direction it was carrying is gone into rounding error, and no rescaling recovers a signal that is no longer there. This is why exploding gradients are a footnote in practice and vanishing gradients changed the architecture.
+
+3.7  It can represent the dependency; it cannot learn it
+------------------------------------------------------------------------------
+  Worth separating two things that get run together.
+
+    can the architecture express the answer?   yes -- a suitable W exists
+    can gradient descent find it?             no -- the gradient that would
+                                              point towards it arrives as noise
+  loss before perturbing the input weights 2.99143
+  loss after                         2.34764
+  gradient reaching step 0, relative 2.84e-36
+  [PASS] the forward pass still carries early information, while the backward pass no longer carries the gradient for it
+         changing how the first input enters moves the loss by 0.6438, so the dependency is expressible; but the gradient arriving there is 2.8e-36 of its starting magnitude, so training cannot exploit it
+  # this distinction decides what the fix has to be. The problem is not that the model is too small or the state too narrow -- it is that the path the gradient travels multiplies it down. So the repair must change the *path*, not the capacity. S4 is exactly that: a route from s_t back to s_{t-1} that adds instead of multiplying.
+
+3.8  So where do exploding gradients actually come from?
+------------------------------------------------------------------------------
+  3.3 makes this a fair question. If tanh damps its own gradient hard enough
+  that sigma_max = 3 still contracts, why is gradient clipping in every
+  recurrent training loop ever written? Two answers, and the second is the
+  one that bites.
+
+  (a) A non-saturating activation removes the brake entirely.
+  eq:  relu'(z) = 1 wherever z > 0
+       exactly 1, not 'at most 1' -- there is no shrinking factor to counteract sigma_max
+  sigma_max(W)  tanh, gradient at d=40  ReLU, same  ReLU / tanh
+  ------------  ----------------------  ----------  -----------
+           0.8                1.85e-22    1.10e-21     6.0e+00x
+           1.2                3.26e-16    1.22e-13     3.7e+02x
+             2                1.33e-09    2.24e-04     1.7e+05x
+             3                2.83e-05    6.55e+02     2.3e+07x
+  [PASS] a non-saturating activation reaches explosion where a saturating one is still contracting
+         at sigma_max = 3.0 ReLU gives 6.55e+02 while tanh gives 2.83e-05 -- 2.3e+07x apart, because tanh's derivative falls as its input grows and ReLU's does not
+
+  (b) The real answer: gradient size is a distribution, not a number.
+      Everything above reports one input sequence. Run many, and the spread
+      is the finding.
+  statistic        gradient at d=40
+  ---------------  ----------------
+  median                  5.342e-06
+  mean                    3.108e-05
+  99th percentile         3.020e-04
+  maximum                 1.554e-03
+  max / median                       291x
+  mean / median                      5.8x
+  [PASS] the distribution of gradient magnitudes is heavy-tailed across inputs
+         over 400 input sequences at sigma_max = 2.5 the mean is 5.8x the median and the worst sequence is 291x it -- a mean well above the median is the signature of a tail
+  # that is where exploding gradients come from, and why they are so disruptive relative to how rare they are. The typical sequence contracts, so training looks healthy for hundreds of updates. Then one batch happens to drive the units into their linear region, where tanh' is near 1 and sigma_max is unopposed, the gradient arrives hundreds of times larger than usual, and a single step throws the weights somewhere useless. Explosion is not a regime you are in, it is an outlier you eventually meet.
+
+  # read that way, clipping stops looking like a hack. It is not correcting a systematic bias -- 3.6 showed it does nothing to the median case -- it is a bound on the tail, and bounding the tail is exactly the right response to a heavy-tailed distribution. It also explains why clipping is nearly free: it fires on a small fraction of batches and leaves the rest untouched. And it explains the last piece of the puzzle, which is that neither clipping nor initialisation touches the vanishing problem at all. That one needs a different path through time, which is S4.
+
+s03 claims 15/15 passed in 1.46s
+==============================================================================
+
